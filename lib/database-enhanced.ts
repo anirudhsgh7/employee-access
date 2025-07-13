@@ -123,25 +123,25 @@ const safeString = (value: any): string => {
   return String(value)
 }
 
-// Format date to YYYY-MM-DD format without time zone information
+// Corrected: Format date to YYYY-MM-DD based on local time
 const formatDateForDB = (dateString: string): string => {
   try {
-    // If it's already in YYYY-MM-DD format, return as is
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-      return dateString
-    }
-
-    // Parse the date and format it as YYYY-MM-DD
     const date = new Date(dateString)
     if (isNaN(date.getTime())) {
       throw new Error("Invalid date")
     }
-
-    return date.toISOString().split("T")[0]
+    const year = date.getFullYear()
+    const month = (date.getMonth() + 1).toString().padStart(2, "0")
+    const day = date.getDate().toString().padStart(2, "0")
+    return `${year}-${month}-${day}`
   } catch (error) {
-    console.error("Error formatting date:", error)
-    // Return current date as fallback
-    return new Date().toISOString().split("T")[0]
+    console.error("Error formatting date for DB:", error)
+    // Fallback to current local date
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = (now.getMonth() + 1).toString().padStart(2, "0")
+    const day = now.getDate().toString().padStart(2, "0")
+    return `${year}-${month}-${day}`
   }
 }
 

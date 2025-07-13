@@ -57,13 +57,12 @@ export default function AttendanceHistoryTab({ employeeId }: AttendanceHistoryTa
     }
   }
 
+  // Corrected: Format date to YYYY-MM-DD based on local time
   const formatDateForAPI = (date: Date): string => {
-    try {
-      return date.toISOString().split("T")[0]
-    } catch (error) {
-      console.error("Date API formatting error:", error)
-      return new Date().toISOString().split("T")[0]
-    }
+    const year = date.getFullYear()
+    const month = (date.getMonth() + 1).toString().padStart(2, "0")
+    const day = date.getDate().toString().padStart(2, "0")
+    return `${year}-${month}-${day}`
   }
 
   const subtractDays = (date: Date, days: number): Date => {
