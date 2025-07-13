@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless"
+import { unstable_noStore as noStore } from "next/cache" // Re-added noStore
 
 // Add error handling for database connection
 let sql: any = null
@@ -13,6 +14,14 @@ try {
   throw new Error("Failed to initialize database connection")
 }
 
+export interface User {
+  id: string
+  username: string
+  password_hash: string
+  role: "admin" | "employee"
+  created_at: Date
+}
+
 export interface Employee {
   id: number
   employee_id: string
@@ -25,9 +34,9 @@ export interface Employee {
   hire_date: string
   is_active: boolean
   profile_image_url?: string
-  card_uid?: string
-  card_active?: boolean
-  card_assigned_date?: string
+  card_uid?: string // Re-added
+  card_active?: boolean // Re-added
+  card_assigned_date?: string // Re-added
   created_at: string
   updated_at: string
 }
@@ -84,6 +93,7 @@ export interface NFCNode {
   description?: string
   ip_address?: string
   is_active: boolean
+  node_type: "ATTENDANCE" | "ROOM_ACCESS"
   last_heartbeat?: string
   created_at: string
   updated_at: string
@@ -235,6 +245,7 @@ const processNodeData = (rawNode: any): NFCNode => {
     description: rawNode.description ? safeString(rawNode.description) : undefined,
     ip_address: rawNode.ip_address ? safeString(rawNode.ip_address) : undefined,
     is_active: Boolean(rawNode.is_active),
+    node_type: rawNode.node_type === "ROOM_ACCESS" ? "ROOM_ACCESS" : "ATTENDANCE",
     last_heartbeat: rawNode.last_heartbeat ? safeString(rawNode.last_heartbeat) : undefined,
     created_at: safeString(rawNode.created_at),
     updated_at: safeString(rawNode.updated_at),
@@ -263,6 +274,7 @@ const processNodeData = (rawNode: any): NFCNode => {
 
 // Enhanced employee functions with better error handling
 export async function getEmployeesWithFilters(filters: SearchFilters = {}): Promise<Employee[]> {
+  noStore() // Ensure no caching
   try {
     // If no filters, use simple query
     if (
@@ -357,6 +369,7 @@ export async function getEmployeesWithFilters(filters: SearchFilters = {}): Prom
 }
 
 export async function getTodayAttendance(): Promise<AttendanceRecord[]> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       WITH attendance_with_duration AS (
@@ -413,6 +426,7 @@ export async function getTodayAttendance(): Promise<AttendanceRecord[]> {
 }
 
 export async function getAttendanceByDate(date: string): Promise<AttendanceRecord[]> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       WITH attendance_with_duration AS (
@@ -474,6 +488,7 @@ export async function getTodayAttendanceStats(): Promise<{
   totalCheckIns: number
   totalCheckOuts: number
 }> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       SELECT 
@@ -506,6 +521,7 @@ export async function getAttendanceStatsByDate(date: string): Promise<{
   totalCheckIns: number
   totalCheckOuts: number
 }> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       SELECT 
@@ -534,6 +550,7 @@ export async function getAttendanceStatsByDate(date: string): Promise<{
 
 // NFC Node Management Functions
 export async function getNFCNodes(): Promise<NFCNode[]> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       SELECT * FROM nfc_nodes 
@@ -553,11 +570,13 @@ export async function getNFCNodes(): Promise<NFCNode[]> {
 }
 
 export async function createNFCNode(nodeData: Partial<NFCNode>): Promise<NFCNode | null> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
-      INSERT INTO nfc_nodes (node_id, node_name, location, description, ip_address, is_active)
+      INSERT INTO nfc_nodes (node_id, node_name, location, description, ip_address, is_active, node_type)
       VALUES (${nodeData.node_id}, ${nodeData.node_name}, ${nodeData.location}, 
-              ${nodeData.description || null}, ${nodeData.ip_address || null}, ${nodeData.is_active ?? true})
+              ${nodeData.description || null}, ${nodeData.ip_address || null}, 
+              ${nodeData.is_active ?? true}, ${nodeData.node_type || "ATTENDANCE"})
       RETURNING *
     `
 
@@ -573,6 +592,7 @@ export async function createNFCNode(nodeData: Partial<NFCNode>): Promise<NFCNode
 }
 
 export async function updateNFCNode(nodeId: string, nodeData: Partial<NFCNode>): Promise<NFCNode | null> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       UPDATE nfc_nodes 
@@ -581,6 +601,7 @@ export async function updateNFCNode(nodeId: string, nodeData: Partial<NFCNode>):
           description = ${nodeData.description || null},
           ip_address = ${nodeData.ip_address || null},
           is_active = ${nodeData.is_active},
+          node_type = ${nodeData.node_type || "ATTENDANCE"},
           updated_at = CURRENT_TIMESTAMP
       WHERE node_id = ${nodeId}
       RETURNING *
@@ -598,6 +619,7 @@ export async function updateNFCNode(nodeId: string, nodeData: Partial<NFCNode>):
 }
 
 export async function deleteNFCNode(nodeId: string): Promise<boolean> {
+  noStore() // Ensure no caching
   try {
     await sql`
       DELETE FROM nfc_nodes WHERE node_id = ${nodeId}
@@ -610,6 +632,7 @@ export async function deleteNFCNode(nodeId: string): Promise<boolean> {
 }
 
 export async function updateNodeHeartbeat(nodeId: string): Promise<void> {
+  noStore() // Ensure no caching
   try {
     await sql`
       UPDATE nfc_nodes 
@@ -629,6 +652,7 @@ export async function updateNodeHeartbeat(nodeId: string): Promise<void> {
 }
 
 export async function getNodeActivityLogs(nodeId?: string, limit = 100): Promise<NodeActivityLog[]> {
+  noStore() // Ensure no caching
   try {
     let result
     if (nodeId) {
@@ -660,10 +684,12 @@ export async function getNodeActivityLogs(nodeId?: string, limit = 100): Promise
 
 // Keep all other functions the same but add safe processing
 export async function getEmployees(): Promise<Employee[]> {
+  noStore() // Ensure no caching
   return getEmployeesWithFilters()
 }
 
-export async function getEmployee(id: number): Promise<Employee | null> {
+export async function getEmployeeById(id: number): Promise<Employee | null> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       SELECT 
@@ -683,12 +709,181 @@ export async function getEmployee(id: number): Promise<Employee | null> {
 
     return processEmployeeData(result[0])
   } catch (error) {
-    console.error("Error fetching employee:", error)
+    console.error("Error fetching employee by ID:", error)
     return null
   }
 }
 
+export async function getEmployeeByNfcCardUid(nfcCardUid: string): Promise<Employee | undefined> {
+  noStore() // Ensure no caching
+  try {
+    const employees = await sql<Employee[]>`SELECT * FROM employees WHERE card_uid = ${nfcCardUid}`
+    return employees[0]
+  } catch (error) {
+    console.error("Failed to fetch employee by NFC card UID:", error)
+    throw new Error("Failed to fetch employee.")
+  }
+}
+
+export async function createEmployee(employee: Partial<Employee>): Promise<Employee> {
+  noStore() // Ensure no caching
+  try {
+    // Format hire_date to ensure it's in YYYY-MM-DD format
+    const formattedHireDate = employee.hire_date
+      ? formatDateForDB(employee.hire_date)
+      : formatDateForDB(new Date().toISOString())
+
+    const [newEmployee] = await sql<Employee[]>`
+      INSERT INTO employees (
+        employee_id, first_name, last_name, email, phone_number,
+        department, position, hire_date, is_active, profile_image_url
+      ) VALUES (
+        ${employee.employee_id},
+        ${employee.first_name},
+        ${employee.last_name},
+        ${employee.email},
+        ${employee.phone_number || null},
+        ${employee.department},
+        ${employee.position},
+        ${formattedHireDate},
+        ${employee.is_active ?? true},
+        ${employee.profile_image_url || null}
+      )
+      RETURNING *
+    `
+    return processEmployeeData(newEmployee)
+  } catch (error) {
+    console.error("Error creating employee:", error)
+    throw new Error(`Failed to create employee: ${error instanceof Error ? error.message : "Unknown error"}`)
+  }
+}
+
+export async function updateEmployee(id: number, employee: Partial<Employee>): Promise<Employee | null> {
+  noStore() // Ensure no caching
+  try {
+    // Build the SET clause dynamically based on provided fields
+    const updateFields = []
+    const values = []
+    let paramCounter = 1
+
+    if (employee.first_name !== undefined) {
+      updateFields.push(`first_name = $${paramCounter++}`)
+      values.push(employee.first_name)
+    }
+
+    if (employee.last_name !== undefined) {
+      updateFields.push(`last_name = $${paramCounter++}`)
+      values.push(employee.last_name)
+    }
+
+    if (employee.email !== undefined) {
+      updateFields.push(`email = $${paramCounter++}`)
+      values.push(employee.email)
+    }
+
+    if (employee.phone_number !== undefined) {
+      updateFields.push(`phone_number = $${paramCounter++}`)
+      values.push(employee.phone_number)
+    }
+
+    if (employee.department !== undefined) {
+      updateFields.push(`department = $${paramCounter++}`)
+      values.push(employee.department)
+    }
+
+    if (employee.position !== undefined) {
+      updateFields.push(`position = $${paramCounter++}`)
+      values.push(employee.position)
+    }
+
+    if (employee.hire_date !== undefined) {
+      // Format the hire_date to ensure it's in YYYY-MM-DD format
+      const formattedHireDate = formatDateForDB(employee.hire_date)
+      updateFields.push(`hire_date = $${paramCounter++}`)
+      values.push(formattedHireDate)
+    }
+
+    if (employee.is_active !== undefined) {
+      updateFields.push(`is_active = $${paramCounter++}`)
+      values.push(employee.is_active)
+    }
+
+    if (employee.profile_image_url !== undefined) {
+      updateFields.push(`profile_image_url = $${paramCounter++}`)
+      values.push(employee.profile_image_url)
+    }
+
+    // Add updated_at timestamp
+    updateFields.push(`updated_at = CURRENT_TIMESTAMP`)
+
+    // If no fields to update, return the current employee
+    if (updateFields.length === 0) {
+      return getEmployeeById(id)
+    }
+
+    // Add the ID parameter
+    values.push(id)
+
+    // Build and execute the query
+    const query = `
+      UPDATE employees 
+      SET ${updateFields.join(", ")} 
+      WHERE id = $${paramCounter}
+      RETURNING *
+    `
+
+    const [updatedEmployee] = await sql<Employee[]>(query, values)
+    return processEmployeeData(updatedEmployee)
+  } catch (error) {
+    console.error("Error updating employee:", error)
+    throw new Error(`Failed to update employee: ${error instanceof Error ? error.message : "Unknown error"}`)
+  }
+}
+
+export async function deleteEmployee(id: number): Promise<void> {
+  noStore() // Ensure no caching
+  try {
+    await sql`DELETE FROM employees WHERE id = ${id}`
+  } catch (error) {
+    console.error("Failed to delete employee:", error)
+    throw new Error("Failed to delete employee.")
+  }
+}
+
+export async function assignNfcCardToEmployee(employeeId: number, nfcCardUid: string): Promise<Employee> {
+  noStore() // Ensure no caching
+  try {
+    const [updatedEmployee] = await sql<Employee[]>`
+      UPDATE employees
+      SET card_uid = ${nfcCardUid}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${employeeId}
+      RETURNING *
+    `
+    return processEmployeeData(updatedEmployee)
+  } catch (error) {
+    console.error("Failed to assign NFC card:", error)
+    throw new Error("Failed to assign NFC card.")
+  }
+}
+
+export async function removeNfcCardFromEmployee(employeeId: number): Promise<Employee> {
+  noStore() // Ensure no caching
+  try {
+    const [updatedEmployee] = await sql<Employee[]>`
+      UPDATE employees
+      SET card_uid = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${employeeId}
+      RETURNING *
+    `
+    return processEmployeeData(updatedEmployee)
+  } catch (error) {
+    console.error("Failed to remove NFC card:", error)
+    throw new Error("Failed to remove NFC card.")
+  }
+}
+
 export async function getRooms(): Promise<Room[]> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       SELECT * FROM rooms 
@@ -709,125 +904,152 @@ export async function getRooms(): Promise<Room[]> {
   }
 }
 
-export async function getEmployeeAccess(employeeId: number): Promise<AccessPermission[]> {
+export async function getRoomById(id: number): Promise<Room | undefined> {
+  noStore() // Ensure no caching
   try {
-    const result = await sql`
-      SELECT 
-        ap.*,
-        r.room_name
-      FROM access_permissions ap
-      JOIN rooms r ON ap.room_id = r.id
-      WHERE ap.employee_id = ${employeeId} AND ap.is_active = true
-      ORDER BY r.room_name
-    `
-
-    // Ensure result is an array
-    if (!result || !Array.isArray(result)) {
-      console.warn("Employee access query result is not an array:", result)
-      return []
-    }
-
-    return result as AccessPermission[]
+    const rooms = await sql<Room[]>`SELECT * FROM rooms WHERE id = ${id}`
+    return rooms[0]
   } catch (error) {
-    console.error("Error fetching employee access:", error)
-    return []
+    console.error("Failed to fetch room by ID:", error)
+    throw new Error("Failed to fetch room.")
   }
 }
 
-export async function grantAccess(employeeId: number, roomId: number, grantedBy: string) {
+export async function grantRoomAccess(
+  employeeId: number,
+  roomId: number,
+  grantedByUserId: string,
+): Promise<AccessPermission> {
+  noStore() // Ensure no caching
   try {
-    await sql`
+    const [newAccess] = await sql<AccessPermission[]>`
       INSERT INTO access_permissions (employee_id, room_id, granted_by)
-      VALUES (${employeeId}, ${roomId}, ${grantedBy})
-      ON CONFLICT (employee_id, room_id) 
-      DO UPDATE SET is_active = true, granted_at = CURRENT_TIMESTAMP, granted_by = ${grantedBy}
+      VALUES (${employeeId}, ${roomId}, ${grantedByUserId})
+      RETURNING *
     `
+    return newAccess
   } catch (error) {
-    console.error("Error granting access:", error)
-    throw error
+    console.error("Failed to grant room access:", error)
+    throw new Error("Failed to grant room access.")
   }
 }
 
-export async function revokeAccess(employeeId: number, roomId: number) {
+export async function revokeRoomAccess(employeeId: number, roomId: number): Promise<void> {
+  noStore() // Ensure no caching
   try {
     await sql`
-      UPDATE access_permissions 
-      SET is_active = false 
+      UPDATE access_permissions
+      SET is_active = false
       WHERE employee_id = ${employeeId} AND room_id = ${roomId}
     `
   } catch (error) {
-    console.error("Error revoking access:", error)
-    throw error
+    console.error("Failed to revoke room access:", error)
+    throw new Error("Failed to revoke room access.")
   }
 }
 
-export async function assignNFCCard(employeeId: number, cardUid: string) {
+export async function getEmployeeRoomAccess(employeeId: number): Promise<AccessPermission[]> {
+  noStore() // Ensure no caching
   try {
-    await sql`
-      INSERT INTO nfc_cards (card_uid, employee_id)
-      VALUES (${cardUid}, ${employeeId})
-      ON CONFLICT (card_uid) 
-      DO UPDATE SET employee_id = ${employeeId}, is_active = true, assigned_date = CURRENT_TIMESTAMP
+    const accessRecords = await sql<AccessPermission[]>`
+      SELECT ap.*, r.room_name
+      FROM access_permissions ap
+      JOIN rooms r ON ap.room_id = r.id
+      WHERE ap.employee_id = ${employeeId} AND ap.is_active = true
+      ORDER BY ap.granted_at DESC
     `
+    return accessRecords
   } catch (error) {
-    console.error("Error assigning NFC card:", error)
-    throw error
+    console.error("Failed to fetch employee room access:", error)
+    throw new Error("Failed to fetch employee room access.")
   }
 }
 
-export async function deactivateNFCCard(cardUid: string) {
+export async function checkRoomAccess(employeeId: number, roomId: number): Promise<boolean> {
+  noStore() // Ensure no caching
   try {
-    await sql`
-      UPDATE nfc_cards 
-      SET is_active = false 
-      WHERE card_uid = ${cardUid}
-    `
-  } catch (error) {
-    console.error("Error deactivating NFC card:", error)
-    throw error
-  }
-}
-
-// Additional helper functions
-export async function createEmployee(employeeData: Partial<Employee>): Promise<Employee> {
-  try {
-    // Format hire_date to ensure it's in YYYY-MM-DD format
-    const formattedHireDate = employeeData.hire_date
-      ? formatDateForDB(employeeData.hire_date)
-      : formatDateForDB(new Date().toISOString())
-
     const result = await sql`
-      INSERT INTO employees (
-        employee_id, first_name, last_name, email, phone_number,
-        department, position, hire_date, is_active, profile_image_url
-      ) VALUES (
-        ${employeeData.employee_id},
-        ${employeeData.first_name},
-        ${employeeData.last_name},
-        ${employeeData.email},
-        ${employeeData.phone_number || null},
-        ${employeeData.department},
-        ${employeeData.position},
-        ${formattedHireDate},
-        ${employeeData.is_active ?? true},
-        ${employeeData.profile_image_url || null}
-      )
+      SELECT COUNT(*) FROM access_permissions
+      WHERE employee_id = ${employeeId} AND room_id = ${roomId} AND is_active = true
+    `
+    return (result[0] as any).count > 0
+  } catch (error) {
+    console.error("Failed to check room access:", error)
+    throw new Error("Failed to check room access.")
+  }
+}
+
+export async function recordCheckIn(employeeId: number, nfcCardUid: string, nodeId: string): Promise<AttendanceRecord> {
+  noStore() // Ensure no caching
+  try {
+    const [newRecord] = await sql<AttendanceRecord[]>`
+      INSERT INTO attendance_records (employee_id, nfc_card_uid, node_id, tap_time, tap_type)
+      VALUES (${employeeId}, ${nfcCardUid}, ${nodeId}, NOW(), 'IN')
       RETURNING *
     `
+    return processAttendanceData(newRecord)
+  } catch (error) {
+    console.error("Failed to record check-in:", error)
+    throw new Error("Failed to record check-in.")
+  }
+}
 
-    // Ensure result is an array and has at least one element
-    if (!result || !Array.isArray(result) || result.length === 0) {
-      throw new Error("Failed to create employee: No result returned")
+export async function recordCheckOut(recordId: number): Promise<AttendanceRecord> {
+  noStore() // Ensure no caching
+  try {
+    const [updatedRecord] = await sql<AttendanceRecord[]>`
+      UPDATE attendance_records
+      SET check_out_time = NOW(),
+          duration_ms = EXTRACT(EPOCH FROM (NOW() - check_in_time)) * 1000,
+          tap_type = 'OUT'
+      WHERE id = ${recordId}
+      RETURNING *
+    `
+    return processAttendanceData(updatedRecord)
+  } catch (error) {
+    console.error("Failed to record check-out:", error)
+    throw new Error("Failed to record check-out.")
+  }
+}
+
+export async function getAttendanceRecords(employeeId?: number, date?: string): Promise<AttendanceRecord[]> {
+  noStore() // Ensure no caching
+  try {
+    let query = `
+      SELECT ar.*, e.first_name, e.last_name, n.location as node_location
+      FROM attendance_records ar
+      JOIN employees e ON ar.employee_id = e.id
+      JOIN nfc_nodes n ON ar.node_id = n.node_id
+    `
+    const params: any[] = []
+    const conditions: string[] = []
+
+    if (employeeId) {
+      conditions.push(`ar.employee_id = $${params.length + 1}`)
+      params.push(employeeId)
     }
 
-    return processEmployeeData(result[0])
+    if (date) {
+      conditions.push(`DATE(ar.tap_time) = $${params.length + 1}`)
+      params.push(date)
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(" AND ")}`
+    }
+
+    query += ` ORDER BY ar.tap_time DESC`
+
+    const result = await sql<AttendanceRecord[]>(query, params)
+    return result.map((row: any) => processAttendanceData(row))
   } catch (error) {
-    console.error("Error creating employee:", error)
-    throw new Error(`Failed to create employee: ${error instanceof Error ? error.message : "Unknown error"}`)
+    console.error("Failed to fetch attendance records:", error)
+    throw new Error("Failed to fetch attendance records.")
   }
 }
 
 export async function getFilterOptions() {
+  noStore() // Ensure no caching
   try {
     const departments = await sql`
       SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department != '' ORDER BY department
@@ -855,48 +1077,49 @@ export async function getFilterOptions() {
 }
 
 export async function getEmployeeAttendanceHistory(employeeId: number, limit = 50): Promise<AttendanceRecord[]> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
-      WITH attendance_with_duration AS (
-        SELECT 
-          ar.id,
-          ar.employee_id,
-          COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
-          ar.tap_time,
-          ar.tap_type,
-          ar.nfc_card_uid,
-          ar.location,
-          ar.node_id,
-          ar.node_location,
-          CASE 
-            WHEN ar.tap_type = 'OUT' THEN (
-              SELECT 
-                CASE 
-                  WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
-                  THEN CONCAT(
-                    FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
-                    FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
-                  )
-                  ELSE NULL
-                END
-              FROM attendance_records ar_in 
-              WHERE ar_in.employee_id = ar.employee_id 
-                AND ar_in.tap_type = 'IN' 
-                AND DATE(ar_in.tap_time) = CURRENT_DATE
-                AND ar_in.tap_time < ar.tap_time
-              ORDER BY ar_in.tap_time DESC 
-              LIMIT 1
-            )
-            ELSE NULL
-          END as duration
-        FROM attendance_records ar
-        LEFT JOIN employees e ON ar.employee_id = e.id
-        WHERE ar.employee_id = ${employeeId} AND DATE(ar.tap_time) = CURRENT_DATE
-      )
-      SELECT * FROM attendance_with_duration
-      ORDER BY tap_time DESC
-      LIMIT ${limit}
-    `
+     WITH attendance_with_duration AS (
+       SELECT 
+         ar.id,
+         ar.employee_id,
+         COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
+         ar.tap_time,
+         ar.tap_type,
+         ar.nfc_card_uid,
+         ar.location,
+         ar.node_id,
+         ar.node_location,
+         CASE 
+           WHEN ar.tap_type = 'OUT' THEN (
+             SELECT 
+               CASE 
+                 WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
+                 THEN CONCAT(
+                   FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
+                   FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
+                 )
+                 ELSE NULL
+               END
+             FROM attendance_records ar_in 
+             WHERE ar_in.employee_id = ar.employee_id 
+               AND ar_in.tap_type = 'IN' 
+               AND DATE(ar_in.tap_time) = CURRENT_DATE
+               AND ar_in.tap_time < ar.tap_time
+             ORDER BY ar_in.tap_time DESC 
+             LIMIT 1
+           )
+           ELSE NULL
+         END as duration
+       FROM attendance_records ar
+       LEFT JOIN employees e ON ar.employee_id = e.id
+       WHERE ar.employee_id = ${employeeId} AND DATE(ar.tap_time) = CURRENT_DATE
+     )
+     SELECT * FROM attendance_with_duration
+     ORDER BY tap_time DESC
+     LIMIT ${limit}
+   `
 
     // Ensure result is an array
     if (!result || !Array.isArray(result)) {
@@ -912,6 +1135,7 @@ export async function getEmployeeAttendanceHistory(employeeId: number, limit = 5
 }
 
 export async function getEmployeeRoomAccessHistory(employeeId: number, limit = 50): Promise<RoomAccessLog[]> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       SELECT 
@@ -939,95 +1163,8 @@ export async function getEmployeeRoomAccessHistory(employeeId: number, limit = 5
   }
 }
 
-export async function updateEmployee(id: number, employeeData: Partial<Employee>): Promise<Employee | null> {
-  try {
-    // Build the SET clause dynamically based on provided fields
-    const updateFields = []
-    const values = []
-    let paramCounter = 1
-
-    if (employeeData.first_name !== undefined) {
-      updateFields.push(`first_name = $${paramCounter++}`)
-      values.push(employeeData.first_name)
-    }
-
-    if (employeeData.last_name !== undefined) {
-      updateFields.push(`last_name = $${paramCounter++}`)
-      values.push(employeeData.last_name)
-    }
-
-    if (employeeData.email !== undefined) {
-      updateFields.push(`email = $${paramCounter++}`)
-      values.push(employeeData.email)
-    }
-
-    if (employeeData.phone_number !== undefined) {
-      updateFields.push(`phone_number = $${paramCounter++}`)
-      values.push(employeeData.phone_number)
-    }
-
-    if (employeeData.department !== undefined) {
-      updateFields.push(`department = $${paramCounter++}`)
-      values.push(employeeData.department)
-    }
-
-    if (employeeData.position !== undefined) {
-      updateFields.push(`position = $${paramCounter++}`)
-      values.push(employeeData.position)
-    }
-
-    if (employeeData.hire_date !== undefined) {
-      // Format the hire_date to ensure it's in YYYY-MM-DD format
-      const formattedHireDate = formatDateForDB(employeeData.hire_date)
-      updateFields.push(`hire_date = $${paramCounter++}`)
-      values.push(formattedHireDate)
-    }
-
-    if (employeeData.is_active !== undefined) {
-      updateFields.push(`is_active = $${paramCounter++}`)
-      values.push(employeeData.is_active)
-    }
-
-    if (employeeData.profile_image_url !== undefined) {
-      updateFields.push(`profile_image_url = $${paramCounter++}`)
-      values.push(employeeData.profile_image_url)
-    }
-
-    // Add updated_at timestamp
-    updateFields.push(`updated_at = CURRENT_TIMESTAMP`)
-
-    // If no fields to update, return the current employee
-    if (updateFields.length === 0) {
-      return getEmployee(id)
-    }
-
-    // Add the ID parameter
-    values.push(id)
-
-    // Build and execute the query
-    const query = `
-      UPDATE employees 
-      SET ${updateFields.join(", ")} 
-      WHERE id = $${paramCounter}
-      RETURNING *
-    `
-
-    const result = await sql.query(query, values)
-
-    // Ensure result is an array and has at least one element
-    if (!result || !Array.isArray(result) || result.length === 0) {
-      return null
-    }
-
-    // Get the updated employee with card info
-    return getEmployee(id)
-  } catch (error) {
-    console.error("Error updating employee:", error)
-    throw new Error(`Failed to update employee: ${error instanceof Error ? error.message : "Unknown error"}`)
-  }
-}
-
 export async function getEmployeeAttendanceByDate(employeeId: number, date: string): Promise<AttendanceRecord[]> {
+  noStore() // Ensure no caching
   try {
     const result = await sql`
       WITH attendance_with_duration AS (
@@ -1042,23 +1179,10 @@ export async function getEmployeeAttendanceByDate(employeeId: number, date: stri
           ar.node_id,
           ar.node_location,
           CASE 
-            WHEN ar.tap_type = 'OUT' THEN (
-              SELECT 
-                CASE 
-                  WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
-                  THEN CONCAT(
-                    FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
-                    FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
-                  )
-                  ELSE NULL
-                END
-              FROM attendance_records ar_in 
-              WHERE ar_in.employee_id = ar.employee_id 
-                AND ar_in.tap_type = 'IN' 
-                AND DATE(ar_in.tap_time) = ${date}
-                AND ar_in.tap_time < ar.tap_time
-              ORDER BY ar_in.tap_time DESC 
-              LIMIT 1
+            WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
+            THEN CONCAT(
+              FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
+              FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
             )
             ELSE NULL
           END as duration

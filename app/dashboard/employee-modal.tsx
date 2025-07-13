@@ -33,10 +33,10 @@ interface EmployeeModalProps {
   employee: Employee | null
   isOpen: boolean
   onClose: () => void
-  onUpdate: () => void
+  onSave: () => void // Changed from onUpdate
 }
 
-export default function EmployeeModal({ employee, isOpen, onClose, onUpdate }: EmployeeModalProps) {
+export default function EmployeeModal({ employee, isOpen, onClose, onSave }: EmployeeModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editedEmployee, setEditedEmployee] = useState<Partial<Employee>>({})
   const [rooms, setRooms] = useState<Room[]>([])
@@ -100,7 +100,7 @@ export default function EmployeeModal({ employee, isOpen, onClose, onUpdate }: E
 
       if (response.ok) {
         setIsEditing(false)
-        onUpdate()
+        onSave() // Changed from onUpdate()
       }
     } catch (error) {
       console.error("Failed to update employee:", error)
@@ -122,7 +122,7 @@ export default function EmployeeModal({ employee, isOpen, onClose, onUpdate }: E
 
       if (response.ok) {
         setNewCardUid("")
-        onUpdate()
+        onSave() // Changed from onUpdate()
       }
     } catch (error) {
       console.error("Failed to assign NFC card:", error)
@@ -141,7 +141,7 @@ export default function EmployeeModal({ employee, isOpen, onClose, onUpdate }: E
       })
 
       if (response.ok) {
-        onUpdate()
+        onSave() // Changed from onUpdate()
       }
     } catch (error) {
       console.error("Failed to deactivate NFC card:", error)

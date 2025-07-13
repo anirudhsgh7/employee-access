@@ -7,7 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Server,
   Plus,
@@ -21,6 +23,10 @@ import {
   RefreshCw,
   Clock,
   MapPin,
+  Users,
+  DoorOpen,
+  Shield,
+  Building,
 } from "lucide-react"
 import type { NFCNode, NodeActivityLog } from "@/lib/database-enhanced"
 
@@ -38,6 +44,7 @@ export default function NodeManagement() {
     description: "",
     ip_address: "",
     is_active: true,
+    node_type: "ATTENDANCE" as "ATTENDANCE" | "ROOM_ACCESS",
   })
 
   useEffect(() => {
@@ -94,6 +101,7 @@ export default function NodeManagement() {
           description: "",
           ip_address: "",
           is_active: true,
+          node_type: "ATTENDANCE",
         })
         fetchNodes()
       }
@@ -168,6 +176,14 @@ export default function NodeManagement() {
     }
   }
 
+  const getNodeTypeIcon = (nodeType: string) => {
+    return nodeType === "ATTENDANCE" ? (
+      <Users className="h-4 w-4 text-blue-500" />
+    ) : (
+      <DoorOpen className="h-4 w-4 text-purple-500" />
+    )
+  }
+
   const formatDateTime = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleString("en-US", {
@@ -192,20 +208,100 @@ export default function NodeManagement() {
     )
   }
 
-  const onlineNodes = nodes.filter((node) => node.status === "ONLINE").length
-  const offlineNodes = nodes.filter((node) => node.status === "OFFLINE").length
-  const errorNodes = nodes.filter((node) => node.status === "ERROR").length
+  // Separate nodes by type
+  const attendanceNodes = nodes.filter((node) => node.node_type === "ATTENDANCE")
+  const roomAccessNodes = nodes.filter((node) => node.node_type === "ROOM_ACCESS")
+
+  // Calculate stats for each type
+  const attendanceStats = {
+    online: attendanceNodes.filter((node) => node.status === "ONLINE").length,
+    offline: attendanceNodes.filter((node) => node.status === "OFFLINE").length,
+    error: attendanceNodes.filter((node) => node.status === "ERROR").length,
+    total: attendanceNodes.length,
+  }
+
+  const roomAccessStats = {
+    online: roomAccessNodes.filter((node) => node.status === "ONLINE").length,
+    offline: roomAccessNodes.filter((node) => node.status === "OFFLINE").length,
+    error: roomAccessNodes.filter((node) => node.status === "ERROR").length,
+    total: roomAccessNodes.length,
+  }
+
+  const renderNodeCard = (node: NFCNode) => (
+    <Card
+      key={node.id}
+      className={`border-l-4 ${node.node_type === "ATTENDANCE" ? "border-l-blue-500" : "border-l-purple-500"}`}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2">
+            {getStatusIcon(node.status || "OFFLINE")}
+            {getNodeTypeIcon(node.node_type)}
+            <h3 className="font-semibold">{node.node_name}</h3>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Badge variant="outline" className={node.node_type === "ATTENDANCE" ? "text-blue-600" : "text-purple-600"}>
+              {node.node_type === "ATTENDANCE" ? "Attendance" : "Room Access"}
+            </Badge>
+            <Badge variant={getStatusColor(node.status || "OFFLINE")}>{node.status || "OFFLINE"}</Badge>
+          </div>
+        </div>
+
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <div className="flex items-center space-x-2">
+            <MapPin className="h-3 w-3" />
+            <span>{node.location}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Server className="h-3 w-3" />
+            <span>{node.node_id}</span>
+          </div>
+          {node.ip_address && (
+            <div className="flex items-center space-x-2">
+              <Activity className="h-3 w-3" />
+              <span>{node.ip_address}</span>
+            </div>
+          )}
+          {node.uptime_duration && (
+            <div className="flex items-center space-x-2">
+              <Clock className="h-3 w-3" />
+              <span>Uptime: {node.uptime_duration}</span>
+            </div>
+          )}
+          {node.last_heartbeat && <div className="text-xs">Last seen: {formatDateTime(node.last_heartbeat)}</div>}
+        </div>
+
+        <div className="flex justify-end space-x-2 mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedNode(node)
+              setIsEditModalOpen(true)
+            }}
+          >
+            <Edit className="h-3 w-3 mr-1" />
+            Edit
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => handleDeleteNode(node.node_id)}>
+            <Trash2 className="h-3 w-3 mr-1" />
+            Delete
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
+      {/* Overall Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-green-100 text-sm font-medium">Online Nodes</p>
-                <p className="text-3xl font-bold">{onlineNodes}</p>
+                <p className="text-3xl font-bold">{attendanceStats.online + roomAccessStats.online}</p>
               </div>
               <Wifi className="h-8 w-8 text-green-200" />
             </div>
@@ -217,7 +313,7 @@ export default function NodeManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-red-100 text-sm font-medium">Offline Nodes</p>
-                <p className="text-3xl font-bold">{offlineNodes}</p>
+                <p className="text-3xl font-bold">{attendanceStats.offline + roomAccessStats.offline}</p>
               </div>
               <WifiOff className="h-8 w-8 text-red-200" />
             </div>
@@ -229,7 +325,7 @@ export default function NodeManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-yellow-100 text-sm font-medium">Error Nodes</p>
-                <p className="text-3xl font-bold">{errorNodes}</p>
+                <p className="text-3xl font-bold">{attendanceStats.error + roomAccessStats.error}</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-yellow-200" />
             </div>
@@ -249,7 +345,7 @@ export default function NodeManagement() {
         </Card>
       </div>
 
-      {/* Node Management */}
+      {/* Node Management Tabs */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -275,12 +371,29 @@ export default function NodeManagement() {
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
+                      <Label htmlFor="node_type">Node Type</Label>
+                      <Select
+                        value={newNode.node_type}
+                        onValueChange={(value: "ATTENDANCE" | "ROOM_ACCESS") =>
+                          setNewNode({ ...newNode, node_type: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select node type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ATTENDANCE">Attendance Tracking</SelectItem>
+                          <SelectItem value="ROOM_ACCESS">Room Access Control</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
                       <Label htmlFor="node_id">Node ID</Label>
                       <Input
                         id="node_id"
                         value={newNode.node_id}
                         onChange={(e) => setNewNode({ ...newNode, node_id: e.target.value })}
-                        placeholder="NODE_006"
+                        placeholder={newNode.node_type === "ATTENDANCE" ? "ATT_006" : "ROOM_006"}
                       />
                     </div>
                     <div>
@@ -289,7 +402,9 @@ export default function NodeManagement() {
                         id="node_name"
                         value={newNode.node_name}
                         onChange={(e) => setNewNode({ ...newNode, node_name: e.target.value })}
-                        placeholder="Conference Room Reader"
+                        placeholder={
+                          newNode.node_type === "ATTENDANCE" ? "Main Entrance Reader" : "Conference Room Reader"
+                        }
                       />
                     </div>
                     <div>
@@ -298,7 +413,7 @@ export default function NodeManagement() {
                         id="location"
                         value={newNode.location}
                         onChange={(e) => setNewNode({ ...newNode, location: e.target.value })}
-                        placeholder="Conference Room A"
+                        placeholder={newNode.node_type === "ATTENDANCE" ? "Main Entrance" : "Conference Room A"}
                       />
                     </div>
                     <div>
@@ -340,73 +455,144 @@ export default function NodeManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {nodes.map((node) => (
-              <Card key={node.id} className="border-l-4 border-l-blue-500">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-2">
-                      {getStatusIcon(node.status || "OFFLINE")}
-                      <h3 className="font-semibold">{node.node_name}</h3>
-                    </div>
-                    <Badge variant={getStatusColor(node.status || "OFFLINE")}>{node.status || "OFFLINE"}</Badge>
-                  </div>
+          <Tabs defaultValue="attendance" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="attendance" className="flex items-center space-x-2">
+                <Users className="h-4 w-4" />
+                <span>Attendance Nodes ({attendanceStats.total})</span>
+              </TabsTrigger>
+              <TabsTrigger value="room-access" className="flex items-center space-x-2">
+                <Shield className="h-4 w-4" />
+                <span>Room Access Nodes ({roomAccessStats.total})</span>
+              </TabsTrigger>
+            </TabsList>
 
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="h-3 w-3" />
-                      <span>{node.location}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Server className="h-3 w-3" />
-                      <span>{node.node_id}</span>
-                    </div>
-                    {node.ip_address && (
-                      <div className="flex items-center space-x-2">
-                        <Activity className="h-3 w-3" />
-                        <span>{node.ip_address}</span>
+            <TabsContent value="attendance" className="space-y-4">
+              {/* Attendance Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-blue-600 text-sm font-medium">Total</p>
+                        <p className="text-2xl font-bold text-blue-700">{attendanceStats.total}</p>
                       </div>
-                    )}
-                    {node.uptime_duration && (
-                      <div className="flex items-center space-x-2">
-                        <Clock className="h-3 w-3" />
-                        <span>Uptime: {node.uptime_duration}</span>
+                      <Building className="h-6 w-6 text-blue-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-green-50 border-green-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-green-600 text-sm font-medium">Online</p>
+                        <p className="text-2xl font-bold text-green-700">{attendanceStats.online}</p>
                       </div>
-                    )}
-                    {node.last_heartbeat && (
-                      <div className="text-xs">Last seen: {formatDateTime(node.last_heartbeat)}</div>
-                    )}
-                  </div>
+                      <Wifi className="h-6 w-6 text-green-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-red-50 border-red-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-red-600 text-sm font-medium">Offline</p>
+                        <p className="text-2xl font-bold text-red-700">{attendanceStats.offline}</p>
+                      </div>
+                      <WifiOff className="h-6 w-6 text-red-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-yellow-50 border-yellow-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-yellow-600 text-sm font-medium">Error</p>
+                        <p className="text-2xl font-bold text-yellow-700">{attendanceStats.error}</p>
+                      </div>
+                      <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-                  <div className="flex justify-end space-x-2 mt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedNode(node)
-                        setIsEditModalOpen(true)
-                      }}
-                    >
-                      <Edit className="h-3 w-3 mr-1" />
-                      Edit
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDeleteNode(node.node_id)}>
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+              {/* Attendance Nodes Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {attendanceNodes.map(renderNodeCard)}
+              </div>
 
-          {nodes.length === 0 && (
-            <div className="text-center py-12">
-              <Server className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-slate-900 mb-2">No NFC nodes found</h3>
-              <p className="text-slate-500">Add your first NFC node to get started</p>
-            </div>
-          )}
+              {attendanceNodes.length === 0 && (
+                <div className="text-center py-12">
+                  <Users className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-slate-900 mb-2">No attendance nodes found</h3>
+                  <p className="text-slate-500">Add your first attendance tracking node to get started</p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="room-access" className="space-y-4">
+              {/* Room Access Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="bg-purple-50 border-purple-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-purple-600 text-sm font-medium">Total</p>
+                        <p className="text-2xl font-bold text-purple-700">{roomAccessStats.total}</p>
+                      </div>
+                      <DoorOpen className="h-6 w-6 text-purple-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-green-50 border-green-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-green-600 text-sm font-medium">Online</p>
+                        <p className="text-2xl font-bold text-green-700">{roomAccessStats.online}</p>
+                      </div>
+                      <Wifi className="h-6 w-6 text-green-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-red-50 border-red-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-red-600 text-sm font-medium">Offline</p>
+                        <p className="text-2xl font-bold text-red-700">{roomAccessStats.offline}</p>
+                      </div>
+                      <WifiOff className="h-6 w-6 text-red-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-yellow-50 border-yellow-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-yellow-600 text-sm font-medium">Error</p>
+                        <p className="text-2xl font-bold text-yellow-700">{roomAccessStats.error}</p>
+                      </div>
+                      <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Room Access Nodes Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {roomAccessNodes.map(renderNodeCard)}
+              </div>
+
+              {roomAccessNodes.length === 0 && (
+                <div className="text-center py-12">
+                  <Shield className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-slate-900 mb-2">No room access nodes found</h3>
+                  <p className="text-slate-500">Add your first room access control node to get started</p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
@@ -448,6 +634,23 @@ export default function NodeManagement() {
           </DialogHeader>
           {selectedNode && (
             <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit_node_type">Node Type</Label>
+                <Select
+                  value={selectedNode.node_type}
+                  onValueChange={(value: "ATTENDANCE" | "ROOM_ACCESS") =>
+                    setSelectedNode({ ...selectedNode, node_type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ATTENDANCE">Attendance Tracking</SelectItem>
+                    <SelectItem value="ROOM_ACCESS">Room Access Control</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <Label htmlFor="edit_node_name">Node Name</Label>
                 <Input
