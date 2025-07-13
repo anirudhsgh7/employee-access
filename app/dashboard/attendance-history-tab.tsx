@@ -83,11 +83,8 @@ export default function AttendanceHistoryTab({ employeeId }: AttendanceHistoryTa
       const today = formatDateForAPI(new Date())
       const selectedDateStr = formatDateForAPI(selectedDate)
 
-      // Use today's endpoint for current date, otherwise use date-specific endpoint
-      const endpoint =
-        selectedDateStr === today
-          ? `/api/employees/${employeeId}/attendance`
-          : `/api/employees/${employeeId}/attendance?date=${selectedDateStr}`
+      // Always use date-specific endpoint to ensure we get the right date's data
+      const endpoint = `/api/employees/${employeeId}/attendance?date=${selectedDateStr}`
 
       const response = await fetch(endpoint)
       const data = await response.json()
@@ -205,6 +202,12 @@ export default function AttendanceHistoryTab({ employeeId }: AttendanceHistoryTa
                         <div className="flex items-center space-x-1">
                           <MapPin className="h-3 w-3" />
                           <span>{record.location}</span>
+                        </div>
+                      )}
+                      {record.tap_type === "OUT" && record.duration && (
+                        <div className="flex items-center space-x-1">
+                          <Clock className="h-3 w-3" />
+                          <span className="text-blue-600 font-medium">Duration: {record.duration}</span>
                         </div>
                       )}
                     </div>

@@ -282,7 +282,12 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
                       <div>
                         <p className="font-medium text-slate-900">{record.employee_name || "Unknown Employee"}</p>
                         <p className="text-sm text-slate-500">{record.location || "Main Entrance"}</p>
-                        <p className="text-xs text-slate-400">{formatTime(record.tap_time)}</p>
+                        <div className="flex items-center space-x-2 text-xs text-slate-400">
+                          <span>{formatTime(record.tap_time)}</span>
+                          {record.tap_type === "OUT" && record.duration && (
+                            <span className="text-blue-600 font-medium">• Duration: {record.duration}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">

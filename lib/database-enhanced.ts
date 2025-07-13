@@ -161,15 +161,17 @@ const processAttendanceData = (rawRecord: any): AttendanceRecord => {
     location: rawRecord.location ? safeString(rawRecord.location) : undefined,
   }
 
-  // Add duration and check times if available
+  // Add duration for check-out records
+  if (rawRecord.duration) {
+    record.duration = safeString(rawRecord.duration)
+  }
+
+  // Add check times if available
   if (rawRecord.check_in_time) {
     record.check_in_time = safeString(rawRecord.check_in_time)
   }
   if (rawRecord.check_out_time) {
     record.check_out_time = safeString(rawRecord.check_out_time)
-  }
-  if (rawRecord.check_in_time && rawRecord.check_out_time) {
-    record.duration = calculateDuration(rawRecord.check_in_time, rawRecord.check_out_time)
   }
 
   return record
@@ -273,18 +275,42 @@ export async function getEmployeesWithFilters(filters: SearchFilters = {}): Prom
 export async function getTodayAttendance(): Promise<AttendanceRecord[]> {
   try {
     const result = await sql`
-      SELECT 
-        ar.id,
-        ar.employee_id,
-        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
-        ar.tap_time,
-        ar.tap_type,
-        ar.nfc_card_uid,
-        ar.location
-      FROM attendance_records ar
-      LEFT JOIN employees e ON ar.employee_id = e.id
-      WHERE DATE(ar.tap_time) = CURRENT_DATE
-      ORDER BY ar.tap_time DESC
+      WITH attendance_with_duration AS (
+        SELECT 
+          ar.id,
+          ar.employee_id,
+          COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
+          ar.tap_time,
+          ar.tap_type,
+          ar.nfc_card_uid,
+          ar.location,
+          CASE 
+            WHEN ar.tap_type = 'OUT' THEN (
+              SELECT 
+                CASE 
+                  WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
+                  THEN CONCAT(
+                    FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
+                    FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
+                  )
+                  ELSE NULL
+                END
+              FROM attendance_records ar_in 
+              WHERE ar_in.employee_id = ar.employee_id 
+                AND ar_in.tap_type = 'IN' 
+                AND DATE(ar_in.tap_time) = CURRENT_DATE
+                AND ar_in.tap_time < ar.tap_time
+              ORDER BY ar_in.tap_time DESC 
+              LIMIT 1
+            )
+            ELSE NULL
+          END as duration
+        FROM attendance_records ar
+        LEFT JOIN employees e ON ar.employee_id = e.id
+        WHERE DATE(ar.tap_time) = CURRENT_DATE
+      )
+      SELECT * FROM attendance_with_duration
+      ORDER BY tap_time DESC
     `
 
     // Ensure result is an array before mapping
@@ -303,18 +329,42 @@ export async function getTodayAttendance(): Promise<AttendanceRecord[]> {
 export async function getAttendanceByDate(date: string): Promise<AttendanceRecord[]> {
   try {
     const result = await sql`
-      SELECT 
-        ar.id,
-        ar.employee_id,
-        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
-        ar.tap_time,
-        ar.tap_type,
-        ar.nfc_card_uid,
-        ar.location
-      FROM attendance_records ar
-      LEFT JOIN employees e ON ar.employee_id = e.id
-      WHERE DATE(ar.tap_time) = ${date}
-      ORDER BY ar.tap_time DESC
+      WITH attendance_with_duration AS (
+        SELECT 
+          ar.id,
+          ar.employee_id,
+          COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
+          ar.tap_time,
+          ar.tap_type,
+          ar.nfc_card_uid,
+          ar.location,
+          CASE 
+            WHEN ar.tap_type = 'OUT' THEN (
+              SELECT 
+                CASE 
+                  WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
+                  THEN CONCAT(
+                    FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
+                    FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
+                  )
+                  ELSE NULL
+                END
+              FROM attendance_records ar_in 
+              WHERE ar_in.employee_id = ar.employee_id 
+                AND ar_in.tap_type = 'IN' 
+                AND DATE(ar_in.tap_time) = ${date}
+                AND ar_in.tap_time < ar.tap_time
+              ORDER BY ar_in.tap_time DESC 
+              LIMIT 1
+            )
+            ELSE NULL
+          END as duration
+        FROM attendance_records ar
+        LEFT JOIN employees e ON ar.employee_id = e.id
+        WHERE DATE(ar.tap_time) = ${date}
+      )
+      SELECT * FROM attendance_with_duration
+      ORDER BY tap_time DESC
     `
 
     // Ensure result is an array before mapping
@@ -593,18 +643,42 @@ export async function getFilterOptions() {
 export async function getEmployeeAttendanceHistory(employeeId: number, limit = 50): Promise<AttendanceRecord[]> {
   try {
     const result = await sql`
-      SELECT 
-        ar.id,
-        ar.employee_id,
-        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
-        ar.tap_time,
-        ar.tap_type,
-        ar.nfc_card_uid,
-        ar.location
-      FROM attendance_records ar
-      LEFT JOIN employees e ON ar.employee_id = e.id
-      WHERE ar.employee_id = ${employeeId} AND DATE(ar.tap_time) = CURRENT_DATE
-      ORDER BY ar.tap_time DESC
+      WITH attendance_with_duration AS (
+        SELECT 
+          ar.id,
+          ar.employee_id,
+          COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
+          ar.tap_time,
+          ar.tap_type,
+          ar.nfc_card_uid,
+          ar.location,
+          CASE 
+            WHEN ar.tap_type = 'OUT' THEN (
+              SELECT 
+                CASE 
+                  WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
+                  THEN CONCAT(
+                    FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
+                    FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
+                  )
+                  ELSE NULL
+                END
+              FROM attendance_records ar_in 
+              WHERE ar_in.employee_id = ar.employee_id 
+                AND ar_in.tap_type = 'IN' 
+                AND DATE(ar_in.tap_time) = CURRENT_DATE
+                AND ar_in.tap_time < ar.tap_time
+              ORDER BY ar_in.tap_time DESC 
+              LIMIT 1
+            )
+            ELSE NULL
+          END as duration
+        FROM attendance_records ar
+        LEFT JOIN employees e ON ar.employee_id = e.id
+        WHERE ar.employee_id = ${employeeId} AND DATE(ar.tap_time) = CURRENT_DATE
+      )
+      SELECT * FROM attendance_with_duration
+      ORDER BY tap_time DESC
       LIMIT ${limit}
     `
 
@@ -740,18 +814,42 @@ export async function updateEmployee(id: number, employeeData: Partial<Employee>
 export async function getEmployeeAttendanceByDate(employeeId: number, date: string): Promise<AttendanceRecord[]> {
   try {
     const result = await sql`
-      SELECT 
-        ar.id,
-        ar.employee_id,
-        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
-        ar.tap_time,
-        ar.tap_type,
-        ar.nfc_card_uid,
-        ar.location
-      FROM attendance_records ar
-      LEFT JOIN employees e ON ar.employee_id = e.id
-      WHERE ar.employee_id = ${employeeId} AND DATE(ar.tap_time) = ${date}
-      ORDER BY ar.tap_time DESC
+      WITH attendance_with_duration AS (
+        SELECT 
+          ar.id,
+          ar.employee_id,
+          COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
+          ar.tap_time,
+          ar.tap_type,
+          ar.nfc_card_uid,
+          ar.location,
+          CASE 
+            WHEN ar.tap_type = 'OUT' THEN (
+              SELECT 
+                CASE 
+                  WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
+                  THEN CONCAT(
+                    FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
+                    FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
+                  )
+                  ELSE NULL
+                END
+              FROM attendance_records ar_in 
+              WHERE ar_in.employee_id = ar.employee_id 
+                AND ar_in.tap_type = 'IN' 
+                AND DATE(ar_in.tap_time) = ${date}
+                AND ar_in.tap_time < ar.tap_time
+              ORDER BY ar_in.tap_time DESC 
+              LIMIT 1
+            )
+            ELSE NULL
+          END as duration
+        FROM attendance_records ar
+        LEFT JOIN employees e ON ar.employee_id = e.id
+        WHERE ar.employee_id = ${employeeId} AND DATE(ar.tap_time) = ${date}
+      )
+      SELECT * FROM attendance_with_duration
+      ORDER BY tap_time DESC
     `
 
     // Ensure result is an array
