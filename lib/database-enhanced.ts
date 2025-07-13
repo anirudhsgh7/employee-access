@@ -454,7 +454,7 @@ export async function getAttendanceByDate(date: string): Promise<AttendanceRecor
               FROM attendance_records ar_in 
               WHERE ar_in.employee_id = ar.employee_id 
                 AND ar_in.tap_type = 'IN' 
-                AND DATE(ar_in.tap_time) = ${date}
+                AND DATE(ar_in.tap_time) = DATE(ar.tap_time) -- Use DATE(ar.tap_time) for the current record's date
                 AND ar_in.tap_time < ar.tap_time
               ORDER BY ar_in.tap_time DESC 
               LIMIT 1
@@ -1105,7 +1105,7 @@ export async function getEmployeeAttendanceHistory(employeeId: number, limit = 5
              FROM attendance_records ar_in 
              WHERE ar_in.employee_id = ar.employee_id 
                AND ar_in.tap_type = 'IN' 
-               AND DATE(ar_in.tap_time) = CURRENT_DATE
+               AND DATE(ar_in.tap_time) = DATE(ar.tap_time) -- Corrected: Use DATE(ar.tap_time) for the current record's date
                AND ar_in.tap_time < ar.tap_time
              ORDER BY ar_in.tap_time DESC 
              LIMIT 1
@@ -1179,10 +1179,23 @@ export async function getEmployeeAttendanceByDate(employeeId: number, date: stri
           ar.node_id,
           ar.node_location,
           CASE 
-            WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
-            THEN CONCAT(
-              FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
-              FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
+            WHEN ar.tap_type = 'OUT' THEN (
+              SELECT 
+                CASE 
+                  WHEN EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) > 0 
+                  THEN CONCAT(
+                    FLOOR(EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) / 3600)::text, 'h ',
+                    FLOOR((EXTRACT(EPOCH FROM (ar.tap_time - ar_in.tap_time)) % 3600) / 60)::text, 'm'
+                  )
+                  ELSE NULL
+                END
+              FROM attendance_records ar_in 
+              WHERE ar_in.employee_id = ar.employee_id 
+                AND ar_in.tap_type = 'IN' 
+                AND DATE(ar_in.tap_time) = DATE(ar.tap_time) -- Corrected: Use DATE(ar.tap_time) for the current record's date
+                AND ar_in.tap_time < ar.tap_time
+              ORDER BY ar_in.tap_time DESC 
+              LIMIT 1
             )
             ELSE NULL
           END as duration
