@@ -80,7 +80,6 @@ export default function AttendanceHistoryTab({ employeeId }: AttendanceHistoryTa
   const fetchAttendanceHistory = async () => {
     try {
       setIsLoading(true)
-      const today = formatDateForAPI(new Date())
       const selectedDateStr = formatDateForAPI(selectedDate)
 
       // Always use date-specific endpoint to ensure we get the right date's data
@@ -198,12 +197,10 @@ export default function AttendanceHistoryTab({ employeeId }: AttendanceHistoryTa
                         <Calendar className="h-3 w-3" />
                         <span>{formatDate(record.tap_time)}</span>
                       </div>
-                      {record.location && (
-                        <div className="flex items-center space-x-1">
-                          <MapPin className="h-3 w-3" />
-                          <span>{record.location}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center space-x-1">
+                        <MapPin className="h-3 w-3" />
+                        <span>{record.node_location || record.location || "Main Entrance"}</span>
+                      </div>
                       {record.tap_type === "OUT" && record.duration && (
                         <div className="flex items-center space-x-1">
                           <Clock className="h-3 w-3" />

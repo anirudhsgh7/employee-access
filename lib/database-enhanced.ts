@@ -57,6 +57,8 @@ export interface AttendanceRecord {
   tap_type: "IN" | "OUT"
   nfc_card_uid?: string
   location?: string
+  node_id?: string
+  node_location?: string
   duration?: string
   check_in_time?: string
   check_out_time?: string
@@ -72,6 +74,29 @@ export interface RoomAccessLog {
   access_granted: boolean
   nfc_card_uid?: string
   access_method: string
+}
+
+export interface NFCNode {
+  id: number
+  node_id: string
+  node_name: string
+  location: string
+  description?: string
+  ip_address?: string
+  is_active: boolean
+  last_heartbeat?: string
+  created_at: string
+  updated_at: string
+  status?: "ONLINE" | "OFFLINE" | "ERROR" | "MAINTENANCE"
+  uptime_duration?: string
+}
+
+export interface NodeActivityLog {
+  id: number
+  node_id: string
+  activity_type: "ONLINE" | "OFFLINE" | "ERROR" | "MAINTENANCE"
+  message?: string
+  timestamp: string
 }
 
 export interface SearchFilters {
@@ -129,6 +154,28 @@ const calculateDuration = (checkIn: string, checkOut: string): string => {
   }
 }
 
+// Calculate uptime duration
+const calculateUptime = (startTime: string): string => {
+  try {
+    const start = new Date(startTime)
+    const now = new Date()
+    const diffMs = now.getTime() - start.getTime()
+
+    if (diffMs <= 0) return "0m"
+
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`
+    if (hours > 0) return `${hours}h ${minutes}m`
+    return `${minutes}m`
+  } catch (error) {
+    console.error("Error calculating uptime:", error)
+    return "N/A"
+  }
+}
+
 const processEmployeeData = (rawEmployee: any): Employee => {
   return {
     id: Number(rawEmployee.id) || 0,
@@ -159,6 +206,8 @@ const processAttendanceData = (rawRecord: any): AttendanceRecord => {
     tap_type: rawRecord.tap_type === "OUT" ? "OUT" : "IN",
     nfc_card_uid: rawRecord.nfc_card_uid ? safeString(rawRecord.nfc_card_uid) : undefined,
     location: rawRecord.location ? safeString(rawRecord.location) : undefined,
+    node_id: rawRecord.node_id ? safeString(rawRecord.node_id) : undefined,
+    node_location: rawRecord.node_location ? safeString(rawRecord.node_location) : undefined,
   }
 
   // Add duration for check-out records
@@ -175,6 +224,41 @@ const processAttendanceData = (rawRecord: any): AttendanceRecord => {
   }
 
   return record
+}
+
+const processNodeData = (rawNode: any): NFCNode => {
+  const node: NFCNode = {
+    id: Number(rawNode.id) || 0,
+    node_id: safeString(rawNode.node_id),
+    node_name: safeString(rawNode.node_name),
+    location: safeString(rawNode.location),
+    description: rawNode.description ? safeString(rawNode.description) : undefined,
+    ip_address: rawNode.ip_address ? safeString(rawNode.ip_address) : undefined,
+    is_active: Boolean(rawNode.is_active),
+    last_heartbeat: rawNode.last_heartbeat ? safeString(rawNode.last_heartbeat) : undefined,
+    created_at: safeString(rawNode.created_at),
+    updated_at: safeString(rawNode.updated_at),
+  }
+
+  // Determine status based on last heartbeat
+  if (rawNode.last_heartbeat) {
+    const lastHeartbeat = new Date(rawNode.last_heartbeat)
+    const now = new Date()
+    const diffMinutes = (now.getTime() - lastHeartbeat.getTime()) / (1000 * 60)
+
+    if (diffMinutes < 5) {
+      node.status = "ONLINE"
+      node.uptime_duration = calculateUptime(rawNode.last_heartbeat)
+    } else if (diffMinutes < 30) {
+      node.status = "ERROR"
+    } else {
+      node.status = "OFFLINE"
+    }
+  } else {
+    node.status = rawNode.is_active ? "OFFLINE" : "MAINTENANCE"
+  }
+
+  return node
 }
 
 // Enhanced employee functions with better error handling
@@ -284,6 +368,8 @@ export async function getTodayAttendance(): Promise<AttendanceRecord[]> {
           ar.tap_type,
           ar.nfc_card_uid,
           ar.location,
+          ar.node_id,
+          ar.node_location,
           CASE 
             WHEN ar.tap_type = 'OUT' THEN (
               SELECT 
@@ -338,6 +424,8 @@ export async function getAttendanceByDate(date: string): Promise<AttendanceRecor
           ar.tap_type,
           ar.nfc_card_uid,
           ar.location,
+          ar.node_id,
+          ar.node_location,
           CASE 
             WHEN ar.tap_type = 'OUT' THEN (
               SELECT 
@@ -441,6 +529,132 @@ export async function getAttendanceStatsByDate(date: string): Promise<{
   } catch (error) {
     console.error("Error fetching attendance stats by date:", error)
     return { totalEmployees: 0, totalCheckIns: 0, totalCheckOuts: 0 }
+  }
+}
+
+// NFC Node Management Functions
+export async function getNFCNodes(): Promise<NFCNode[]> {
+  try {
+    const result = await sql`
+      SELECT * FROM nfc_nodes 
+      ORDER BY node_name
+    `
+
+    if (!result || !Array.isArray(result)) {
+      console.warn("NFC nodes query result is not an array:", result)
+      return []
+    }
+
+    return result.map((row: any) => processNodeData(row))
+  } catch (error) {
+    console.error("Error fetching NFC nodes:", error)
+    return []
+  }
+}
+
+export async function createNFCNode(nodeData: Partial<NFCNode>): Promise<NFCNode | null> {
+  try {
+    const result = await sql`
+      INSERT INTO nfc_nodes (node_id, node_name, location, description, ip_address, is_active)
+      VALUES (${nodeData.node_id}, ${nodeData.node_name}, ${nodeData.location}, 
+              ${nodeData.description || null}, ${nodeData.ip_address || null}, ${nodeData.is_active ?? true})
+      RETURNING *
+    `
+
+    if (!result || !Array.isArray(result) || result.length === 0) {
+      return null
+    }
+
+    return processNodeData(result[0])
+  } catch (error) {
+    console.error("Error creating NFC node:", error)
+    throw error
+  }
+}
+
+export async function updateNFCNode(nodeId: string, nodeData: Partial<NFCNode>): Promise<NFCNode | null> {
+  try {
+    const result = await sql`
+      UPDATE nfc_nodes 
+      SET node_name = ${nodeData.node_name}, 
+          location = ${nodeData.location},
+          description = ${nodeData.description || null},
+          ip_address = ${nodeData.ip_address || null},
+          is_active = ${nodeData.is_active},
+          updated_at = CURRENT_TIMESTAMP
+      WHERE node_id = ${nodeId}
+      RETURNING *
+    `
+
+    if (!result || !Array.isArray(result) || result.length === 0) {
+      return null
+    }
+
+    return processNodeData(result[0])
+  } catch (error) {
+    console.error("Error updating NFC node:", error)
+    throw error
+  }
+}
+
+export async function deleteNFCNode(nodeId: string): Promise<boolean> {
+  try {
+    await sql`
+      DELETE FROM nfc_nodes WHERE node_id = ${nodeId}
+    `
+    return true
+  } catch (error) {
+    console.error("Error deleting NFC node:", error)
+    throw error
+  }
+}
+
+export async function updateNodeHeartbeat(nodeId: string): Promise<void> {
+  try {
+    await sql`
+      UPDATE nfc_nodes 
+      SET last_heartbeat = CURRENT_TIMESTAMP 
+      WHERE node_id = ${nodeId}
+    `
+
+    // Log the heartbeat activity
+    await sql`
+      INSERT INTO node_activity_logs (node_id, activity_type, message)
+      VALUES (${nodeId}, 'ONLINE', 'Heartbeat received')
+    `
+  } catch (error) {
+    console.error("Error updating node heartbeat:", error)
+    throw error
+  }
+}
+
+export async function getNodeActivityLogs(nodeId?: string, limit = 100): Promise<NodeActivityLog[]> {
+  try {
+    let result
+    if (nodeId) {
+      result = await sql`
+        SELECT * FROM node_activity_logs 
+        WHERE node_id = ${nodeId}
+        ORDER BY timestamp DESC 
+        LIMIT ${limit}
+      `
+    } else {
+      result = await sql`
+        SELECT * FROM node_activity_logs 
+        ORDER BY timestamp DESC 
+        LIMIT ${limit}
+      `
+    }
+
+    if (!result || !Array.isArray(result)) {
+      console.warn("Node activity logs query result is not an array:", result)
+      return []
+    }
+
+    return result as NodeActivityLog[]
+  } catch (error) {
+    console.error("Error fetching node activity logs:", error)
+    return []
   }
 }
 
@@ -652,6 +866,8 @@ export async function getEmployeeAttendanceHistory(employeeId: number, limit = 5
           ar.tap_type,
           ar.nfc_card_uid,
           ar.location,
+          ar.node_id,
+          ar.node_location,
           CASE 
             WHEN ar.tap_type = 'OUT' THEN (
               SELECT 
@@ -823,6 +1039,8 @@ export async function getEmployeeAttendanceByDate(employeeId: number, date: stri
           ar.tap_type,
           ar.nfc_card_uid,
           ar.location,
+          ar.node_id,
+          ar.node_location,
           CASE 
             WHEN ar.tap_type = 'OUT' THEN (
               SELECT 

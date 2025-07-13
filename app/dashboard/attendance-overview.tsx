@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Clock, Users, TrendingUp, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react"
+import { CalendarIcon, Clock, Users, TrendingUp, RefreshCw, ChevronLeft, ChevronRight, MapPin } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import type { AttendanceRecord } from "@/lib/database-enhanced"
@@ -281,8 +281,11 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
                       </div>
                       <div>
                         <p className="font-medium text-slate-900">{record.employee_name || "Unknown Employee"}</p>
-                        <p className="text-sm text-slate-500">{record.location || "Main Entrance"}</p>
-                        <div className="flex items-center space-x-2 text-xs text-slate-400">
+                        <div className="flex items-center space-x-4 text-sm text-slate-500">
+                          <div className="flex items-center space-x-1">
+                            <MapPin className="h-3 w-3" />
+                            <span>{record.node_location || record.location || "Main Entrance"}</span>
+                          </div>
                           <span>{formatTime(record.tap_time)}</span>
                           {record.tap_type === "OUT" && record.duration && (
                             <span className="text-blue-600 font-medium">• Duration: {record.duration}</span>
