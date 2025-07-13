@@ -3,7 +3,10 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Clock, Calendar, MapPin } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Clock, Calendar, MapPin, CalendarIcon, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import type { AttendanceRecord } from "@/lib/database-enhanced"
 
 interface AttendanceHistoryTabProps {
@@ -13,22 +16,102 @@ interface AttendanceHistoryTabProps {
 export default function AttendanceHistoryTab({ employeeId }: AttendanceHistoryTabProps) {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [calendarOpen, setCalendarOpen] = useState(false)
 
   useEffect(() => {
     fetchAttendanceHistory()
-  }, [employeeId])
+  }, [employeeId, selectedDate])
+
+  const formatDate = (dateInput: string | Date): string => {
+    try {
+      const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput
+      if (isNaN(date.getTime())) {
+        return "Invalid Date"
+      }
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+      })
+    } catch (error) {
+      console.error("Date formatting error:", error)
+      return "Invalid Date"
+    }
+  }
+
+  const formatTime = (dateInput: string | Date): string => {
+    try {
+      const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput
+      if (isNaN(date.getTime())) {
+        return "Invalid Time"
+      }
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+    } catch (error) {
+      console.error("Time formatting error:", error)
+      return "Invalid Time"
+    }
+  }
+
+  const formatDateForAPI = (date: Date): string => {
+    try {
+      return date.toISOString().split("T")[0]
+    } catch (error) {
+      console.error("Date API formatting error:", error)
+      return new Date().toISOString().split("T")[0]
+    }
+  }
+
+  const subtractDays = (date: Date, days: number): Date => {
+    try {
+      const result = new Date(date)
+      result.setDate(result.getDate() - days)
+      return result
+    } catch (error) {
+      console.error("Date subtraction error:", error)
+      return new Date()
+    }
+  }
 
   const fetchAttendanceHistory = async () => {
     try {
-      const response = await fetch(`/api/employees/${employeeId}/attendance`)
+      setIsLoading(true)
+      const today = formatDateForAPI(new Date())
+      const selectedDateStr = formatDateForAPI(selectedDate)
+
+      // Use today's endpoint for current date, otherwise use date-specific endpoint
+      const endpoint =
+        selectedDateStr === today
+          ? `/api/employees/${employeeId}/attendance`
+          : `/api/employees/${employeeId}/attendance?date=${selectedDateStr}`
+
+      const response = await fetch(endpoint)
       const data = await response.json()
-      setAttendance(data)
+      setAttendance(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error("Failed to fetch attendance history:", error)
+      setAttendance([])
     } finally {
       setIsLoading(false)
     }
   }
+
+  const handlePreviousDay = () => {
+    setSelectedDate((prev) => subtractDays(prev, 1))
+  }
+
+  const handleNextDay = () => {
+    const today = new Date()
+    if (selectedDate < today) {
+      setSelectedDate(subtractDays(selectedDate, -1))
+    }
+  }
+
+  const isToday = formatDateForAPI(selectedDate) === formatDateForAPI(new Date())
 
   if (isLoading) {
     return (
@@ -43,16 +126,55 @@ export default function AttendanceHistoryTab({ employeeId }: AttendanceHistoryTa
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center text-lg">
-          <Clock className="h-5 w-5 mr-2" />
-          Attendance History
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center text-lg">
+            <Clock className="h-5 w-5 mr-2" />
+            Attendance History - {formatDate(selectedDate)}
+          </CardTitle>
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" size="sm" onClick={handlePreviousDay}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="min-w-[120px] bg-transparent">
+                  <CalendarIcon className="h-4 w-4 mr-2" />
+                  {formatDate(selectedDate)}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <CalendarComponent
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => {
+                    if (date) {
+                      setSelectedDate(date)
+                      setCalendarOpen(false)
+                    }
+                  }}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Button variant="outline" size="sm" onClick={handleNextDay} disabled={isToday}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+
+            <Button variant="outline" size="sm" onClick={fetchAttendanceHistory} disabled={isLoading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         {attendance.length === 0 ? (
           <div className="text-center py-8">
             <Clock className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-            <p className="text-slate-500">No attendance records found</p>
+            <p className="text-slate-500">No attendance records found for {formatDate(selectedDate)}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -72,12 +194,12 @@ export default function AttendanceHistoryTab({ employeeId }: AttendanceHistoryTa
                       <Badge variant={record.tap_type === "IN" ? "default" : "secondary"}>
                         {record.tap_type === "IN" ? "Check In" : "Check Out"}
                       </Badge>
-                      <span className="text-sm font-medium">{new Date(record.tap_time).toLocaleTimeString()}</span>
+                      <span className="text-sm font-medium">{formatTime(record.tap_time)}</span>
                     </div>
                     <div className="flex items-center space-x-4 mt-1 text-sm text-slate-500">
                       <div className="flex items-center space-x-1">
                         <Calendar className="h-3 w-3" />
-                        <span>{new Date(record.tap_time).toLocaleDateString()}</span>
+                        <span>{formatDate(record.tap_time)}</span>
                       </div>
                       {record.location && (
                         <div className="flex items-center space-x-1">

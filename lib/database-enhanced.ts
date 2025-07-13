@@ -27,6 +27,7 @@ export interface Employee {
   profile_image_url?: string
   card_uid?: string
   card_active?: boolean
+  card_assigned_date?: string
   created_at: string
   updated_at: string
 }
@@ -56,6 +57,9 @@ export interface AttendanceRecord {
   tap_type: "IN" | "OUT"
   nfc_card_uid?: string
   location?: string
+  duration?: string
+  check_in_time?: string
+  check_out_time?: string
 }
 
 export interface RoomAccessLog {
@@ -106,6 +110,25 @@ const formatDateForDB = (dateString: string): string => {
   }
 }
 
+// Calculate duration between two timestamps
+const calculateDuration = (checkIn: string, checkOut: string): string => {
+  try {
+    const inTime = new Date(checkIn)
+    const outTime = new Date(checkOut)
+    const diffMs = outTime.getTime() - inTime.getTime()
+
+    if (diffMs <= 0) return "0h 0m"
+
+    const hours = Math.floor(diffMs / (1000 * 60 * 60))
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+
+    return `${hours}h ${minutes}m`
+  } catch (error) {
+    console.error("Error calculating duration:", error)
+    return "N/A"
+  }
+}
+
 const processEmployeeData = (rawEmployee: any): Employee => {
   return {
     id: Number(rawEmployee.id) || 0,
@@ -121,13 +144,14 @@ const processEmployeeData = (rawEmployee: any): Employee => {
     profile_image_url: rawEmployee.profile_image_url ? safeString(rawEmployee.profile_image_url) : undefined,
     card_uid: rawEmployee.card_uid ? safeString(rawEmployee.card_uid) : undefined,
     card_active: Boolean(rawEmployee.card_active),
+    card_assigned_date: rawEmployee.card_assigned_date ? safeString(rawEmployee.card_assigned_date) : undefined,
     created_at: safeString(rawEmployee.created_at),
     updated_at: safeString(rawEmployee.updated_at),
   }
 }
 
 const processAttendanceData = (rawRecord: any): AttendanceRecord => {
-  return {
+  const record: AttendanceRecord = {
     id: Number(rawRecord.id) || 0,
     employee_id: Number(rawRecord.employee_id) || 0,
     employee_name: safeString(rawRecord.employee_name),
@@ -136,6 +160,19 @@ const processAttendanceData = (rawRecord: any): AttendanceRecord => {
     nfc_card_uid: rawRecord.nfc_card_uid ? safeString(rawRecord.nfc_card_uid) : undefined,
     location: rawRecord.location ? safeString(rawRecord.location) : undefined,
   }
+
+  // Add duration and check times if available
+  if (rawRecord.check_in_time) {
+    record.check_in_time = safeString(rawRecord.check_in_time)
+  }
+  if (rawRecord.check_out_time) {
+    record.check_out_time = safeString(rawRecord.check_out_time)
+  }
+  if (rawRecord.check_in_time && rawRecord.check_out_time) {
+    record.duration = calculateDuration(rawRecord.check_in_time, rawRecord.check_out_time)
+  }
+
+  return record
 }
 
 // Enhanced employee functions with better error handling
@@ -153,7 +190,8 @@ export async function getEmployeesWithFilters(filters: SearchFilters = {}): Prom
         SELECT 
           e.*,
           n.card_uid,
-          n.is_active as card_active
+          n.is_active as card_active,
+          n.assigned_date as card_assigned_date
         FROM employees e
         LEFT JOIN nfc_cards n ON e.id = n.employee_id
         ORDER BY e.employee_id
@@ -172,7 +210,8 @@ export async function getEmployeesWithFilters(filters: SearchFilters = {}): Prom
       `SELECT 
         e.*,
         n.card_uid,
-        n.is_active as card_active
+        n.is_active as card_active,
+        n.assigned_date as card_assigned_date
       FROM employees e
       LEFT JOIN nfc_cards n ON e.id = n.employee_id
       WHERE 1=1`,
@@ -234,13 +273,18 @@ export async function getEmployeesWithFilters(filters: SearchFilters = {}): Prom
 export async function getTodayAttendance(): Promise<AttendanceRecord[]> {
   try {
     const result = await sql`
-      SELECT DISTINCT ON (ar.employee_id)
-        ar.*,
-        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name
+      SELECT 
+        ar.id,
+        ar.employee_id,
+        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
+        ar.tap_time,
+        ar.tap_type,
+        ar.nfc_card_uid,
+        ar.location
       FROM attendance_records ar
       LEFT JOIN employees e ON ar.employee_id = e.id
       WHERE DATE(ar.tap_time) = CURRENT_DATE
-      ORDER BY ar.employee_id, ar.tap_time DESC
+      ORDER BY ar.tap_time DESC
     `
 
     // Ensure result is an array before mapping
@@ -259,13 +303,18 @@ export async function getTodayAttendance(): Promise<AttendanceRecord[]> {
 export async function getAttendanceByDate(date: string): Promise<AttendanceRecord[]> {
   try {
     const result = await sql`
-      SELECT DISTINCT ON (ar.employee_id)
-        ar.*,
-        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name
+      SELECT 
+        ar.id,
+        ar.employee_id,
+        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
+        ar.tap_time,
+        ar.tap_type,
+        ar.nfc_card_uid,
+        ar.location
       FROM attendance_records ar
       LEFT JOIN employees e ON ar.employee_id = e.id
       WHERE DATE(ar.tap_time) = ${date}
-      ORDER BY ar.employee_id, ar.tap_time DESC
+      ORDER BY ar.tap_time DESC
     `
 
     // Ensure result is an array before mapping
@@ -281,6 +330,70 @@ export async function getAttendanceByDate(date: string): Promise<AttendanceRecor
   }
 }
 
+// Get today's attendance stats (not cumulative)
+export async function getTodayAttendanceStats(): Promise<{
+  totalEmployees: number
+  totalCheckIns: number
+  totalCheckOuts: number
+}> {
+  try {
+    const result = await sql`
+      SELECT 
+        COUNT(DISTINCT ar.employee_id) as total_employees,
+        COUNT(CASE WHEN ar.tap_type = 'IN' THEN 1 END) as total_check_ins,
+        COUNT(CASE WHEN ar.tap_type = 'OUT' THEN 1 END) as total_check_outs
+      FROM attendance_records ar
+      WHERE DATE(ar.tap_time) = CURRENT_DATE
+    `
+
+    if (!result || !Array.isArray(result) || result.length === 0) {
+      return { totalEmployees: 0, totalCheckIns: 0, totalCheckOuts: 0 }
+    }
+
+    const stats = result[0]
+    return {
+      totalEmployees: Number(stats.total_employees) || 0,
+      totalCheckIns: Number(stats.total_check_ins) || 0,
+      totalCheckOuts: Number(stats.total_check_outs) || 0,
+    }
+  } catch (error) {
+    console.error("Error fetching today's attendance stats:", error)
+    return { totalEmployees: 0, totalCheckIns: 0, totalCheckOuts: 0 }
+  }
+}
+
+// Get attendance stats for a specific date
+export async function getAttendanceStatsByDate(date: string): Promise<{
+  totalEmployees: number
+  totalCheckIns: number
+  totalCheckOuts: number
+}> {
+  try {
+    const result = await sql`
+      SELECT 
+        COUNT(DISTINCT ar.employee_id) as total_employees,
+        COUNT(CASE WHEN ar.tap_type = 'IN' THEN 1 END) as total_check_ins,
+        COUNT(CASE WHEN ar.tap_type = 'OUT' THEN 1 END) as total_check_outs
+      FROM attendance_records ar
+      WHERE DATE(ar.tap_time) = ${date}
+    `
+
+    if (!result || !Array.isArray(result) || result.length === 0) {
+      return { totalEmployees: 0, totalCheckIns: 0, totalCheckOuts: 0 }
+    }
+
+    const stats = result[0]
+    return {
+      totalEmployees: Number(stats.total_employees) || 0,
+      totalCheckIns: Number(stats.total_check_ins) || 0,
+      totalCheckOuts: Number(stats.total_check_outs) || 0,
+    }
+  } catch (error) {
+    console.error("Error fetching attendance stats by date:", error)
+    return { totalEmployees: 0, totalCheckIns: 0, totalCheckOuts: 0 }
+  }
+}
+
 // Keep all other functions the same but add safe processing
 export async function getEmployees(): Promise<Employee[]> {
   return getEmployeesWithFilters()
@@ -292,7 +405,8 @@ export async function getEmployee(id: number): Promise<Employee | null> {
       SELECT 
         e.*,
         n.card_uid,
-        n.is_active as card_active
+        n.is_active as card_active,
+        n.assigned_date as card_assigned_date
       FROM employees e
       LEFT JOIN nfc_cards n ON e.id = n.employee_id
       WHERE e.id = ${id}
@@ -480,11 +594,16 @@ export async function getEmployeeAttendanceHistory(employeeId: number, limit = 5
   try {
     const result = await sql`
       SELECT 
-        ar.*,
-        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name
+        ar.id,
+        ar.employee_id,
+        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
+        ar.tap_time,
+        ar.tap_type,
+        ar.nfc_card_uid,
+        ar.location
       FROM attendance_records ar
       LEFT JOIN employees e ON ar.employee_id = e.id
-      WHERE ar.employee_id = ${employeeId}
+      WHERE ar.employee_id = ${employeeId} AND DATE(ar.tap_time) = CURRENT_DATE
       ORDER BY ar.tap_time DESC
       LIMIT ${limit}
     `
@@ -615,5 +734,35 @@ export async function updateEmployee(id: number, employeeData: Partial<Employee>
   } catch (error) {
     console.error("Error updating employee:", error)
     throw new Error(`Failed to update employee: ${error instanceof Error ? error.message : "Unknown error"}`)
+  }
+}
+
+export async function getEmployeeAttendanceByDate(employeeId: number, date: string): Promise<AttendanceRecord[]> {
+  try {
+    const result = await sql`
+      SELECT 
+        ar.id,
+        ar.employee_id,
+        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') as employee_name,
+        ar.tap_time,
+        ar.tap_type,
+        ar.nfc_card_uid,
+        ar.location
+      FROM attendance_records ar
+      LEFT JOIN employees e ON ar.employee_id = e.id
+      WHERE ar.employee_id = ${employeeId} AND DATE(ar.tap_time) = ${date}
+      ORDER BY ar.tap_time DESC
+    `
+
+    // Ensure result is an array
+    if (!result || !Array.isArray(result)) {
+      console.warn("Employee attendance by date query result is not an array:", result)
+      return []
+    }
+
+    return result.map((row: any) => processAttendanceData(row))
+  } catch (error) {
+    console.error("Error fetching employee attendance by date:", error)
+    return []
   }
 }

@@ -76,12 +76,33 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [isLoading, setIsLoading] = useState(false)
   const [calendarOpen, setCalendarOpen] = useState(false)
+  const [dayStats, setDayStats] = useState({
+    totalEmployees: 0,
+    totalCheckIns: 0,
+    totalCheckOuts: 0,
+  })
 
   useEffect(() => {
     if (selectedDate) {
       fetchAttendanceForDate(formatDateForAPI(selectedDate))
     }
   }, [selectedDate])
+
+  const fetchDayStats = async (dateString: string) => {
+    try {
+      const today = formatDateForAPI(new Date())
+      const endpoint =
+        dateString === today ? "/api/attendance/today-stats" : `/api/attendance/date-stats?date=${dateString}`
+
+      const response = await fetch(endpoint)
+      if (response.ok) {
+        const stats = await response.json()
+        setDayStats(stats)
+      }
+    } catch (error) {
+      console.error("Failed to fetch day stats:", error)
+    }
+  }
 
   const fetchAttendanceForDate = async (dateString: string) => {
     setIsLoading(true)
@@ -103,6 +124,9 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
         console.warn("Received non-array attendance data:", data)
         setAttendance([])
       }
+
+      // Fetch stats for the selected date
+      await fetchDayStats(dateString)
     } catch (error) {
       console.error("Failed to fetch attendance:", error)
       setAttendance([])
@@ -122,27 +146,6 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
     }
   }
 
-  const getAttendanceStats = () => {
-    if (!Array.isArray(attendance)) {
-      return {
-        totalEmployees: 0,
-        checkedIn: 0,
-        checkedOut: 0,
-      }
-    }
-
-    const uniqueEmployees = new Set(attendance.map((record) => record.employee_id))
-    const checkedIn = attendance.filter((record) => record.tap_type === "IN").length
-    const checkedOut = attendance.filter((record) => record.tap_type === "OUT").length
-
-    return {
-      totalEmployees: uniqueEmployees.size,
-      checkedIn,
-      checkedOut,
-    }
-  }
-
-  const stats = getAttendanceStats()
   const isToday = formatDateForAPI(selectedDate) === formatDateForAPI(new Date())
 
   return (
@@ -153,8 +156,10 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-blue-100 text-sm font-medium">Active Employees</p>
-                <p className="text-3xl font-bold">{stats.totalEmployees}</p>
+                <p className="text-blue-100 text-sm font-medium">
+                  {isToday ? "Today's Active Employees" : "Active Employees"}
+                </p>
+                <p className="text-3xl font-bold">{dayStats.totalEmployees}</p>
               </div>
               <Users className="h-8 w-8 text-blue-200" />
             </div>
@@ -165,8 +170,8 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-green-100 text-sm font-medium">Check-ins</p>
-                <p className="text-3xl font-bold">{stats.checkedIn}</p>
+                <p className="text-green-100 text-sm font-medium">{isToday ? "Today's Check-ins" : "Check-ins"}</p>
+                <p className="text-3xl font-bold">{dayStats.totalCheckIns}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-green-200" />
             </div>
@@ -177,8 +182,8 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-orange-100 text-sm font-medium">Check-outs</p>
-                <p className="text-3xl font-bold">{stats.checkedOut}</p>
+                <p className="text-orange-100 text-sm font-medium">{isToday ? "Today's Check-outs" : "Check-outs"}</p>
+                <p className="text-3xl font-bold">{dayStats.totalCheckOuts}</p>
               </div>
               <Clock className="h-8 w-8 text-orange-200" />
             </div>
@@ -191,7 +196,9 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
         <Card className="shadow-lg border-0">
           <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-t-lg">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-xl font-bold text-slate-800">Attendance History</CardTitle>
+              <CardTitle className="text-xl font-bold text-slate-800">
+                Attendance History - {formatDate(selectedDate)}
+              </CardTitle>
               <div className="flex items-center space-x-2">
                 <div className="flex items-center space-x-2">
                   <Button variant="outline" size="sm" onClick={handlePreviousDay}>
@@ -200,7 +207,7 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
 
                   <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="min-w-[150px]">
+                      <Button variant="outline" size="sm" className="min-w-[150px] bg-transparent">
                         <CalendarIcon className="h-4 w-4 mr-2" />
                         {formatDate(selectedDate)}
                       </Button>
@@ -275,16 +282,13 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
                       <div>
                         <p className="font-medium text-slate-900">{record.employee_name || "Unknown Employee"}</p>
                         <p className="text-sm text-slate-500">{record.location || "Main Entrance"}</p>
+                        <p className="text-xs text-slate-400">{formatTime(record.tap_time)}</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
                       <Badge variant={record.tap_type === "IN" ? "default" : "secondary"}>
                         {record.tap_type === "IN" ? "Check In" : "Check Out"}
                       </Badge>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-slate-900">{formatTime(record.tap_time)}</p>
-                        <p className="text-xs text-slate-500">{formatDate(record.tap_time)}</p>
-                      </div>
                     </div>
                   </div>
                 ))}
