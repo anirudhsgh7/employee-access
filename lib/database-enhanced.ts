@@ -550,24 +550,35 @@ export async function getAttendanceStatsByDate(date: string): Promise<{
 
 // NFC Node Management Functions
 export async function getNFCNodes(): Promise<NFCNode[]> {
-  noStore() // Ensure no caching
+  noStore();
   try {
-    const result = await sql`
-      SELECT * FROM nfc_nodes 
-      ORDER BY node_name
-    `
+    // Mark nodes as OFFLINE if last heartbeat was more than 6 minutes ago
+    await sql`
+      UPDATE nfc_nodes
+      SET status = 'OFFLINE'
+      WHERE (last_heartbeat IS NULL OR last_heartbeat < NOW() - INTERVAL '6 minutes')
+        AND status = 'ONLINE';
+    `;
+    // (Optional) Also mark nodes as ONLINE if they have recent heartbeat but status isn't updated 
+    await sql`
+      UPDATE nfc_nodes
+      SET status = 'ONLINE'
+      WHERE last_heartbeat >= NOW() - INTERVAL '6 minutes'
+        AND status = 'OFFLINE';
+    `;
 
+    const result = await sql`SELECT * FROM nfc_nodes ORDER BY node_name`;
     if (!result || !Array.isArray(result)) {
-      console.warn("NFC nodes query result is not an array:", result)
-      return []
+      console.warn("NFC nodes query result is not an array:", result);
+      return [];
     }
-
-    return result.map((row: any) => processNodeData(row))
+    return result.map((row: any) => processNodeData(row));
   } catch (error) {
-    console.error("Error fetching NFC nodes:", error)
-    return []
+    console.error("Failed to fetch NFC nodes:", error);
+    return [];
   }
 }
+
 
 export async function createNFCNode(nodeData: Partial<NFCNode>): Promise<NFCNode | null> {
   noStore() // Ensure no caching
@@ -632,24 +643,45 @@ export async function deleteNFCNode(nodeId: string): Promise<boolean> {
 }
 
 export async function updateNodeHeartbeat(nodeId: string): Promise<void> {
-  noStore() // Ensure no caching
+  noStore(); // prevent caching
   try {
+    // Check the node's last heartbeat time and current status
+    const [node] = await sql`SELECT status, last_heartbeat FROM nfc_nodes WHERE node_id = ${nodeId}`;
+    const now = Date.now();
+    let wasOffline = false;
+    if (node) {
+      const lastHb = node.last_heartbeat ? new Date(node.last_heartbeat).getTime() : 0;
+      const status = node.status;
+      // Consider node offline if status was OFFLINE or last heartbeat was more than 6 minutes ago
+      if (status === 'OFFLINE' || (lastHb > 0 && now - lastHb > 6 * 60 * 1000)) {
+        wasOffline = true;
+      }
+    }
+
+    // Update the node's last_heartbeat to current time, and set status to ONLINE
     await sql`
       UPDATE nfc_nodes 
-      SET last_heartbeat = CURRENT_TIMESTAMP 
+      SET last_heartbeat = CURRENT_TIMESTAMP, status = 'ONLINE' 
       WHERE node_id = ${nodeId}
-    `
+    `;
 
-    // Log the heartbeat activity
-    await sql`
-      INSERT INTO node_activity_logs (node_id, activity_type, message)
-      VALUES (${nodeId}, 'ONLINE', 'Heartbeat received')
-    `
+    // Only log an ONLINE event if the node was previously offline
+    if (wasOffline) {
+      await sql`
+        INSERT INTO node_activity_logs (node_id, activity_type, message)
+        VALUES (${nodeId}, 'ONLINE', 'Node came online')
+      `;
+      console.log(`Node ${nodeId} came online (heartbeat received after downtime).`);
+    } else {
+      // (Optional: you could log a heartbeat ping here if needed, but it's usually not necessary to log every ping)
+      console.log(`Heartbeat received from node ${nodeId}. (Already online)`);
+    }
   } catch (error) {
-    console.error("Error updating node heartbeat:", error)
-    throw error
+    console.error("Error updating node heartbeat:", error);
+    throw error;
   }
 }
+
 
 export async function getNodeActivityLogs(nodeId?: string, limit = 100): Promise<NodeActivityLog[]> {
   noStore() // Ensure no caching
