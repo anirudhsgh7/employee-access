@@ -11,6 +11,8 @@ This repository will stay in sync with your deployed chats on [v0.dev](https://v
 Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
 
 ## Deployment
+This is the link to the website: https://v0-new-project-kmwaowdpwxa.vercel.app/login
+
 
 Your project is live at:
 
