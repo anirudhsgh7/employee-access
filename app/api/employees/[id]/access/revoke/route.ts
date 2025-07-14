@@ -1,15 +1,25 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { revokeAccess } from "@/lib/database"
+import { NextResponse } from "next/server"
+import { revokeRoomAccess } from "@/lib/database-enhanced" // Corrected import
+import { getSession } from "@/lib/auth"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
+    const session = await getSession()
+    if (!session || session.user.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const employeeId = Number.parseInt(params.id)
     const { roomId } = await request.json()
 
-    await revokeAccess(employeeId, roomId)
+    if (isNaN(employeeId) || isNaN(roomId)) {
+      return NextResponse.json({ error: "Invalid employee ID or room ID" }, { status: 400 })
+    }
 
-    return NextResponse.json({ success: true })
-  } catch (success) {
-    return NextResponse.json({ error: "Failed to revoke access" }, { status: 500 })
+    await revokeRoomAccess(employeeId, roomId) // Corrected function call
+    return NextResponse.json({ message: "Room access revoked successfully" })
+  } catch (error) {
+    console.error("Failed to revoke room access:", error)
+    return NextResponse.json({ error: "Failed to revoke room access" }, { status: 500 })
   }
 }
