@@ -25,7 +25,7 @@ export default function LoginForm() {
   const [userId, setUserId] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError] = useState<LoginError | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [retryCountdown, setRetryCountdown] = useState(0)
   const [connectionStatus, setConnectionStatus] = useState<"online" | "offline">("online")
@@ -62,35 +62,46 @@ export default function LoginForm() {
     return null
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setIsLoading(true)
+ const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+  setError(null)
+  setIsLoading(true)
 
+  try {
+    console.log("Submitting to /api/auth/login");
+
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ userId, password }),
+    })
+
+    const text = await response.text() // DEBUG: get raw text
+    console.log("Raw Response:", text)
+
+    let data
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId, password }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || "Login failed")
-      }
-
-      // Refresh the page to update auth state
-      router.push("/dashboard")
-      router.refresh()
-    } catch (err: any) {
-      setError(err.message || "An error occurred during login")
-    } finally {
-      setIsLoading(false)
+      data = JSON.parse(text)
+    } catch (err) {
+      throw new Error("Invalid JSON returned from server")
     }
+
+    if (!response.ok) {
+      throw new Error(data.error || "Login failed")
+    }
+
+    router.push("/dashboard")
+    router.refresh()
+  } catch (err: any) {
+    console.error(err)
+    setError({ message: err.message || "An error occurred during login", type: "auth" })
+  } finally {
+    setIsLoading(false)
   }
+}
+
 
   const getErrorIcon = (type: string) => {
     switch (type) {
@@ -145,12 +156,12 @@ export default function LoginForm() {
             {error && (
               <Alert variant="destructive">
                 <ExclamationTriangleIcon className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{error.message}</AlertDescription>
               </Alert>
             )}
             <div className="rounded-md shadow-sm -space-y-px">
-              <div>
-                <Label htmlFor="user-id" className="sr-only">
+              <div className = "mb-4">
+                <Label htmlFor="user-id" className="sr-only"> 
                   User ID
                 </Label>
                 <Input
