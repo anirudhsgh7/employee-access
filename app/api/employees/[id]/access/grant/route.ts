@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import { grantRoomAccess } from "@/lib/database-enhanced" // Corrected import
-import { getSession } from "@/lib/auth"
+import { getUser } from "@/lib/auth"
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession()
-    if (!session || session.user.role !== "admin") {
+    const user = await getUser()
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Invalid employee ID or room ID" }, { status: 400 })
     }
 
-    const grantedAccess = await grantRoomAccess(employeeId, roomId, session.user.id) // Corrected function call
+    const grantedAccess = await grantRoomAccess(employeeId, roomId, user.user_id)
     return NextResponse.json(grantedAccess)
   } catch (error) {
     console.error("Failed to grant room access:", error)

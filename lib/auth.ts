@@ -9,7 +9,7 @@ export interface User {
 
 export async function getUser(): Promise<User | null> {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const userCookie = cookieStore.get("user")
 
     if (!userCookie) {
@@ -50,7 +50,7 @@ export async function requireAuth() {
 
 export async function setUserCookie(user: User) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
 
     // Create a more secure session token
     const sessionData = {
@@ -74,7 +74,7 @@ export async function setUserCookie(user: User) {
 
 export async function clearUserCookie() {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     cookieStore.delete("user")
   } catch (error) {
     console.error("Error clearing user cookie:", error)

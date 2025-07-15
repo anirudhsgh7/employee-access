@@ -864,7 +864,8 @@ export async function updateEmployee(id: number, employee: Partial<Employee>): P
       RETURNING *
     `
 
-    const [updatedEmployee] = await sql<Employee[]>(query, values)
+    const result = await sql(query, values)
+    const [updatedEmployee] = result as Employee[]
     return processEmployeeData(updatedEmployee)
   } catch (error) {
     console.error("Error updating employee:", error)
@@ -954,12 +955,25 @@ export async function grantRoomAccess(
 ): Promise<AccessPermission> {
   noStore() // Ensure no caching
   try {
-    const [newAccess] = await sql<AccessPermission[]>`
-      INSERT INTO access_permissions (employee_id, room_id, granted_by)
-      VALUES (${employeeId}, ${roomId}, ${grantedByUserId})
+    // Try to update existing inactive record first
+    const [updatedAccess] = await sql<AccessPermission[]>`
+      UPDATE access_permissions 
+      SET is_active = true, granted_by = ${grantedByUserId}, granted_at = CURRENT_TIMESTAMP
+      WHERE employee_id = ${employeeId} AND room_id = ${roomId} AND is_active = false
       RETURNING *
     `
-    return newAccess
+    
+    // If no existing record was updated, insert a new one
+    if (!updatedAccess) {
+      const [newAccess] = await sql<AccessPermission[]>`
+        INSERT INTO access_permissions (employee_id, room_id, granted_by, is_active)
+        VALUES (${employeeId}, ${roomId}, ${grantedByUserId}, true)
+        RETURNING *
+      `
+      return newAccess
+    }
+    
+    return updatedAccess
   } catch (error) {
     console.error("Failed to grant room access:", error)
     throw new Error("Failed to grant room access.")
@@ -1072,7 +1086,7 @@ export async function getAttendanceRecords(employeeId?: number, date?: string): 
 
     query += ` ORDER BY ar.tap_time DESC`
 
-    const result = await sql<AttendanceRecord[]>(query, params)
+    const result = await sql(query, params) as AttendanceRecord[]
     return result.map((row: any) => processAttendanceData(row))
   } catch (error) {
     console.error("Failed to fetch attendance records:", error)
