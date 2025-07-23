@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Search, CreditCard, Key, UserPlus } from "lucide-react"
-import type { Employee } from "@/lib/database"
+import type { Employee } from "@/lib/database-enhanced"
 import EmployeeModal from "./employee-modal"
 
 interface EmployeeListProps {

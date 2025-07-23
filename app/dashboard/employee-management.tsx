@@ -402,16 +402,17 @@ export default function EmployeeManagement() {
       </Card>
 
       {/* Add Employee Modal */}
-      {isAddModalOpen && (
-        <AddEmployeeModal
-          isOpen={isAddModalOpen}
-          onClose={() => setIsAddModalOpen(false)}
-          onSave={() => {
-            fetchEmployees()
-            setIsAddModalOpen(false)
-          }}
-        />
-      )}
+{isAddModalOpen && (
+  <AddEmployeeModal
+    isOpen={isAddModalOpen}
+    onClose={() => setIsAddModalOpen(false)}
+
+    onEmployeeAdded={() => {
+      fetchEmployees();
+      setIsAddModalOpen(false);
+    }}
+  />
+)}
 
       {/* Employee Details Modal */}
       {isEmployeeModalOpen && selectedEmployee && (

@@ -39,6 +39,7 @@ export interface Employee {
   card_assigned_date?: string // Re-added
   created_at: string
   updated_at: string
+  role_id?: number
 }
 
 export interface Room {
@@ -757,18 +758,20 @@ export async function getEmployeeByNfcCardUid(nfcCardUid: string): Promise<Emplo
   }
 }
 
+
 export async function createEmployee(employee: Partial<Employee>): Promise<Employee> {
-  noStore() // Ensure no caching
+  noStore(); // Ensure no caching
   try {
     // Format hire_date to ensure it's in YYYY-MM-DD format
     const formattedHireDate = employee.hire_date
       ? formatDateForDB(employee.hire_date)
-      : formatDateForDB(new Date().toISOString())
+      : formatDateForDB(new Date().toISOString());
 
+    // Insert the new employee into the 'employees' table
     const [newEmployee] = await sql<Employee[]>`
       INSERT INTO employees (
         employee_id, first_name, last_name, email, phone_number,
-        department, position, hire_date, is_active, profile_image_url
+        department, position, hire_date, is_active, profile_image_url, role_id
       ) VALUES (
         ${employee.employee_id},
         ${employee.first_name},
@@ -779,14 +782,47 @@ export async function createEmployee(employee: Partial<Employee>): Promise<Emplo
         ${employee.position},
         ${formattedHireDate},
         ${employee.is_active ?? true},
-        ${employee.profile_image_url || null}
+        ${employee.profile_image_url || null},
+        ${employee.role_id}
       )
       RETURNING *
-    `
-    return processEmployeeData(newEmployee)
+    `;
+
+    // Process the returned employee data into the expected format
+    const createdEmployee = processEmployeeData(newEmployee);
+
+    // --- AUTOMATIC ROOM ASSIGNMENT LOGIC ---
+    const department = createdEmployee.department;
+
+    // Check if the department exists in our room configurations
+    if (department && roomConfigurations[department as keyof typeof roomConfigurations]) {
+      try {
+        const roomCodesForDepartment = roomConfigurations[department as keyof typeof roomConfigurations];
+
+        // Fetch the actual numeric room IDs from the database using their codes
+        const roomIdsForDepartment = await getRoomIdsByCodes(roomCodesForDepartment);
+
+        // User ID for automated access grants (action performed via admin panel)
+        const grantedByUserId = null;
+
+        // Loop through each relevant room ID and grant access to the new employee
+        for (const roomId of roomIdsForDepartment) {
+          await grantRoomAccess(createdEmployee.id, roomId, grantedByUserId);
+          console.log(`Granted access for employee ${createdEmployee.employee_id} (${department}) to room ID ${roomId}`);
+        }
+      } catch (autoAssignError) {
+        // Log any errors during auto-assignment, but do not prevent employee creation from succeeding.
+        console.error(`Error during automatic room assignment for ${department} employee ${createdEmployee.employee_id}:`, autoAssignError);
+      }
+    }
+    // --- END AUTOMATIC ROOM ASSIGNMENT LOGIC ---
+
+    // Return the newly created and processed employee data
+    return createdEmployee;
   } catch (error) {
-    console.error("Error creating employee:", error)
-    throw new Error(`Failed to create employee: ${error instanceof Error ? error.message : "Unknown error"}`)
+    console.error("Error creating employee:", error);
+    // Re-throw the error to indicate that employee creation failed
+    throw new Error(`Failed to create employee: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
 }
 
@@ -951,34 +987,117 @@ export async function getRoomById(id: number): Promise<Room | undefined> {
 export async function grantRoomAccess(
   employeeId: number,
   roomId: number,
-  grantedByUserId: string,
+  grantedByUserId: string | null,
 ): Promise<AccessPermission> {
-  noStore() // Ensure no caching
+  noStore();
   try {
     // Try to update existing inactive record first
     const [updatedAccess] = await sql<AccessPermission[]>`
-      UPDATE access_permissions 
+      UPDATE access_permissions
       SET is_active = true, granted_by = ${grantedByUserId}, granted_at = CURRENT_TIMESTAMP
       WHERE employee_id = ${employeeId} AND room_id = ${roomId} AND is_active = false
       RETURNING *
-    `
-    
+    `;
+
     // If no existing record was updated, insert a new one
     if (!updatedAccess) {
       const [newAccess] = await sql<AccessPermission[]>`
         INSERT INTO access_permissions (employee_id, room_id, granted_by, is_active)
         VALUES (${employeeId}, ${roomId}, ${grantedByUserId}, true)
         RETURNING *
-      `
-      return newAccess
+      `;
+      return newAccess;
     }
-    
-    return updatedAccess
+
+    return updatedAccess;
   } catch (error) {
-    console.error("Failed to grant room access:", error)
-    throw new Error("Failed to grant room access.")
+    console.error("Failed to grant room access:", error);
+    throw new Error("Failed to grant room access.");
   }
 }
+
+// Room configurations for each department/role
+const roomConfigurations = {
+  'Engineering': [
+    'ROOM_021', 'ROOM_022', 'ROOM_023', // Floors 2,3,4
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms (assuming Conf Room is also a meeting room)
+    'ROOM_013', // Library
+    'ROOM_009', // Break Room
+    'ROOM_011', // Reception
+    'ROOM_012', // Training Room
+  ],
+  'Marketing': [
+    'ROOM_020', // Floor 1
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
+    'ROOM_013', // Library
+    'ROOM_009', // Break Room
+    'ROOM_011', // Reception
+  ],
+  'Sales': [
+    'ROOM_024', // Floor 5
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
+    'ROOM_009', // Break Room
+    'ROOM_011', // Reception
+  ],
+  'HR': [
+    'ROOM_019', // HR Cabin
+    'ROOM_018', // CEO Cabin
+    'ROOM_020', 'ROOM_021', 'ROOM_022', 'ROOM_023', 'ROOM_024', // All floors
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
+    'ROOM_009', // Break Room
+    'ROOM_013', // Library
+    'ROOM_012', // Training Room
+    'EXEC001',  // Executive Office
+  ],
+  'Finance': [
+    'ROOM_016', // Finance Room
+    'ROOM_017', // Accounts Room
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
+    'ROOM_009', // Break Room
+    'ROOM_011', // Reception
+    'ROOM_013', // Library
+  ],
+  'Operations': [
+    'ROOM_020', 'ROOM_021', 'ROOM_022', 'ROOM_023', 'ROOM_024', // All floors
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
+    'ROOM_010', // Security Office
+    'ROOM_009', // Break Room
+    'ROOM_011', // Reception
+    'ROOM_013', // Library
+  ],
+  'IT': [
+    'ROOM_021', 'ROOM_022', 'ROOM_023', // Floor 2,3,4
+    'SERV001',  // Server Room
+    'ROOM_015', // Server Backup Room
+    'ROOM_010', // Security Office
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
+    'ROOM_009', // Break Room
+    'ROOM_011', // Reception
+    'ROOM_014', // Admin Cabin
+  ],
+  'Customer Support': [
+    'ROOM_020', // Floor 1
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
+    'ROOM_012', // Training Room
+    'ROOM_009', // Break Room
+    'ROOM_011', // Reception
+  ],
+  'Legal': [
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
+    'ROOM_018', // CEO Cabin
+    'EXEC001',  // Executive Office
+    'ROOM_013', // Library
+    'ROOM_009', // Break Room
+    'ROOM_011', // Reception
+  ],
+  'Research': [
+    'ROOM_013', // Library
+    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
+    'ROOM_021', 'ROOM_022', 'ROOM_023', // Floor 2,3,4
+    'ROOM_009', // Break Room
+    'ROOM_011', // Reception
+  ],
+};
 
 export async function revokeRoomAccess(employeeId: number, roomId: number): Promise<void> {
   noStore() // Ensure no caching
@@ -1263,5 +1382,20 @@ export async function getEmployeeAttendanceByDate(employeeId: number, date: stri
   } catch (error) {
     console.error("Error fetching employee attendance by date:", error)
     return []
+  }
+}
+
+
+export async function getRoomIdsByCodes(roomCodes: string[]): Promise<number[]> {
+  noStore();
+  try {
+    const result = await sql<{ id: number }[]>`
+      SELECT id FROM rooms
+      WHERE room_code = ANY(${roomCodes}::text[]) AND is_active = true
+    `;
+    return result.map((row: { id: any }) => row.id);
+  } catch (error) {
+    console.error("Error fetching room IDs by codes:", error);
+    throw new Error("Failed to fetch room IDs for auto-assignment.");
   }
 }

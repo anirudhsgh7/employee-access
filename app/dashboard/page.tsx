@@ -1,12 +1,13 @@
 import { requireAuth } from "@/lib/auth"
 import DashboardHeader from "./dashboard-header"
 import DashboardTabs from "./dashboard-tabs"
+import { AttendanceRecord } from "@/lib/database-enhanced"
 
 export default async function DashboardPage() {
   // This will automatically redirect to login if not authenticated
   const user = await requireAuth()
 
-  let todayAttendance = []
+  let todayAttendance: AttendanceRecord[] = []
 
   // Safely fetch attendance data with fallback
   try {

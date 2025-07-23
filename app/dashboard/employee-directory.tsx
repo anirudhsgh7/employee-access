@@ -310,7 +310,7 @@ export default function EmployeeDirectory() {
         <AddEmployeeModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          onSave={() => {
+          onEmployeeAdded={() => {
             fetchEmployees()
             setIsAddModalOpen(false)
           }}
