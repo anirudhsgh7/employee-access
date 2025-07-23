@@ -281,6 +281,11 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
                       <Badge variant={record.tap_type === "IN" ? "default" : "secondary"}>
                         {record.tap_type === "IN" ? "Check In" : "Check Out"}
                       </Badge>
+                      {record.tap_type === "OUT" && record.duration && (
+                        <span className="text-sm text-slate-700 font-semibold ml-2">
+                        ({record.duration}) {/* Display the duration here */}
+                        </span>
+                      )}
                       <div className="text-right">
                         <p className="text-sm font-medium text-slate-900">{formatTime(record.tap_time)}</p>
                         <p className="text-xs text-slate-500">{formatDate(record.tap_time)}</p>

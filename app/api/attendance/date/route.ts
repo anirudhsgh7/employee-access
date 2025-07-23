@@ -1,45 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
+// app/api/attendance/date/route.ts
+import { type NextRequest, NextResponse } from "next/server";
+import { getAttendanceByDate } from "@/lib/database-enhanced"; // Import your function
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const { uid } = await request.json();
-    if (!uid) {
-      return NextResponse.json({ success: false, error: "UID is required" }, { status: 400 });
+    const { searchParams } = new URL(request.url);
+    const date = searchParams.get("date"); // Get the date from the query parameter
+
+    if (!date) {
+      return NextResponse.json({ error: "Date query parameter is required" }, { status: 400 });
     }
 
-    // Look up the employee by active NFC card UID
-    const { neon } = await import("@neondatabase/serverless");
-    const sql = neon(process.env.DATABASE_URL!);
-    // Find active card
-    const cardRows: any[] = await sql`
-      SELECT employee_id 
-      FROM nfc_cards 
-      WHERE card_uid = ${uid} AND is_active = true
-      LIMIT 1
-    `;
-    if (!cardRows.length) {
-      return NextResponse.json({ success: false, error: "Card not recognized" }, { status: 404 });
-    }
-    const employeeId = cardRows[0].employee_id;
-
-    // Check if attendance already recorded today
-    const already: any[] = await sql`
-      SELECT 1 FROM attendance_records
-      WHERE employee_id = ${employeeId}
-        AND DATE(tap_time) = CURRENT_DATE
-      LIMIT 1
-    `;
-    if (already.length === 0) {
-      // Insert new attendance record
-      await sql`
-        INSERT INTO attendance_records (employee_id, nfc_card_uid) 
-        VALUES (${employeeId}, ${uid})
-      `;
-    }
-
-    return NextResponse.json({ success: true });
+    const attendance = await getAttendanceByDate(date); // Use the function that filters by the provided date
+    return NextResponse.json(attendance);
   } catch (error) {
-    console.error("Error in POST /api/attendance:", error);
-    return NextResponse.json({ success: false, error: "Server error" }, { status: 500 });
+    console.error("Error in GET /api/attendance/date:", error);
+    return NextResponse.json({ error: "Failed to fetch attendance for date" }, { status: 500 });
   }
 }

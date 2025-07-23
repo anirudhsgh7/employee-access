@@ -69,7 +69,7 @@ export interface AttendanceRecord {
   location?: string
   node_id?: string
   node_location?: string
-  duration?: string
+  duration?: string | null // Duration only for OUT records
   check_in_time?: string
   check_out_time?: string
 }
