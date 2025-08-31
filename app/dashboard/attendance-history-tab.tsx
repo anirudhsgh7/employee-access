@@ -203,7 +203,7 @@ export default function AttendanceHistoryTab({ employeeId }: AttendanceHistoryTa
                       {record.tap_type === "OUT" && record.duration && (
                         <div className="flex items-center space-x-1">
                           <Clock className="h-3 w-3" />
-                          <span className="text-blue-600 font-medium">Duration: {record.duration}</span>
+                          <span className="text-sky-500 font-medium">Duration: {record.duration}</span>
                         </div>
                       )}
                     </div>

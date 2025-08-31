@@ -51,10 +51,17 @@ const formatTime = (dateInput: string | Date): string => {
 
 const formatDateForAPI = (date: Date): string => {
   try {
-    return date.toISOString().split("T")[0]
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
   } catch (error) {
     console.error("Date API formatting error:", error)
-    return new Date().toISOString().split("T")[0]
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, "0")
+    const day = String(now.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
   }
 }
 
@@ -95,6 +102,14 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
         throw new Error(`Failed to fetch attendance: ${response.status}`)
       }
 
+      const contentType = response.headers.get("content-type") || ""
+      if (!contentType.includes("application/json")) {
+        const text = await response.text()
+        throw new Error(
+          `Expected JSON but received ${contentType || "unknown"}. First 200 chars: ${text.slice(0, 200)}`,
+        )
+      }
+
       const data = await response.json()
 
       if (Array.isArray(data)) {
@@ -104,7 +119,7 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
         setAttendance([])
       }
     } catch (error) {
-      console.error("Failed to fetch attendance:", error)
+      console.error("Failed to fetch attendance:", error instanceof Error ? error.message : error)
       setAttendance([])
     } finally {
       setIsLoading(false)
@@ -200,7 +215,7 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
 
                   <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="min-w-[150px]">
+                      <Button variant="outline" size="sm" className="min-w-[150px] bg-transparent">
                         <CalendarIcon className="h-4 w-4 mr-2" />
                         {formatDate(selectedDate)}
                       </Button>
@@ -283,7 +298,7 @@ export default function AttendanceOverview({ initialAttendance, showFullHistory 
                       </Badge>
                       {record.tap_type === "OUT" && record.duration && (
                         <span className="text-sm text-slate-700 font-semibold ml-2">
-                        ({record.duration}) {/* Display the duration here */}
+                          ({record.duration}) {/* Display the duration here */}
                         </span>
                       )}
                       <div className="text-right">
