@@ -745,6 +745,15 @@ export async function getEmployeeById(id: number): Promise<Employee | null> {
   }
 }
 
+export async function getEmployee(idOrString: number | string): Promise<Employee | null> {
+  const id = typeof idOrString === "string" ? Number(idOrString) : idOrString
+  if (!Number.isFinite(id)) {
+    console.warn("getEmployee called with invalid id:", idOrString)
+    return null
+  }
+  return getEmployeeById(id)
+}
+
 export async function getEmployeeByNfcCardUid(nfcCardUid: string): Promise<Employee | undefined> {
   noStore() // Ensure no caching
   try {

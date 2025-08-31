@@ -80,3 +80,8 @@ export async function clearUserCookie() {
     console.error("Error clearing user cookie:", error)
   }
 }
+
+export async function getSession() {
+  const user = await getUser()
+  return user ? { user } : null
+}
