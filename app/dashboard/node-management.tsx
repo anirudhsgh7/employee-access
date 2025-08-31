@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,8 +27,12 @@ import {
   DoorOpen,
   Shield,
   Building,
+  CheckCircle2,
+  XCircle,
+  User2,
+  KeyRound,
 } from "lucide-react"
-import type { NFCNode, NodeActivityLog } from "@/lib/database-enhanced"
+import type { NFCNode, NodeActivityLog, RoomAccessLog } from "@/lib/database-enhanced"
 
 export default function NodeManagement() {
   const [nodes, setNodes] = useState<NFCNode[]>([])
@@ -47,18 +51,27 @@ export default function NodeManagement() {
     node_type: "ATTENDANCE" as "ATTENDANCE" | "ROOM_ACCESS",
   })
 
+  // Room access history modal state
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyNode, setHistoryNode] = useState<NFCNode | null>(null)
+  const [historyLogs, setHistoryLogs] = useState<RoomAccessLog[]>([])
+
   useEffect(() => {
     fetchNodes()
     fetchActivityLogs()
 
-    // Set up polling for real-time updates
     const interval = setInterval(() => {
       fetchNodes()
       fetchActivityLogs()
-    }, 30000) // Update every 30 seconds
+      // Refresh history if panel is open
+      if (historyOpen && historyNode) {
+        void fetchRoomAccessHistory(historyNode.node_id)
+      }
+    }, 30000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [historyOpen, historyNode])
 
   const fetchNodes = async () => {
     try {
@@ -82,6 +95,31 @@ export default function NodeManagement() {
       console.error("Failed to fetch activity logs:", error)
       setActivityLogs([])
     }
+  }
+
+  const fetchRoomAccessHistory = useCallback(async (nodeId: string) => {
+    setHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}/room-access-logs?limit=100`)
+      const ct = res.headers.get("content-type") || ""
+      if (!res.ok || !ct.includes("application/json")) {
+        throw new Error(`Unexpected response (${res.status})`)
+      }
+      const data = await res.json()
+      setHistoryLogs(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error("Failed to fetch room access history:", error)
+      setHistoryLogs([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  const handleOpenHistory = (node: NFCNode) => {
+    if (node.node_type !== "ROOM_ACCESS") return
+    setHistoryNode(node)
+    setHistoryOpen(true)
+    void fetchRoomAccessHistory(node.node_id)
   }
 
   const handleCreateNode = async () => {
@@ -164,15 +202,15 @@ export default function NodeManagement() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "ONLINE":
-        return "default"
+        return "default" as const
       case "OFFLINE":
-        return "destructive"
+        return "destructive" as const
       case "ERROR":
-        return "secondary"
+        return "secondary" as const
       case "MAINTENANCE":
-        return "outline"
+        return "outline" as const
       default:
-        return "secondary"
+        return "secondary" as const
     }
   }
 
@@ -208,11 +246,9 @@ export default function NodeManagement() {
     )
   }
 
-  // Separate nodes by type
   const attendanceNodes = nodes.filter((node) => node.node_type === "ATTENDANCE")
   const roomAccessNodes = nodes.filter((node) => node.node_type === "ROOM_ACCESS")
 
-  // Calculate stats for each type
   const attendanceStats = {
     online: attendanceNodes.filter((node) => node.status === "ONLINE").length,
     offline: attendanceNodes.filter((node) => node.status === "OFFLINE").length,
@@ -227,70 +263,114 @@ export default function NodeManagement() {
     total: roomAccessNodes.length,
   }
 
-  const renderNodeCard = (node: NFCNode) => (
-    <Card
-      key={node.id}
-      className={`border-l-4 ${node.node_type === "ATTENDANCE" ? "border-l-blue-500" : "border-l-purple-500"}`}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center space-x-2">
-            {getStatusIcon(node.status || "OFFLINE")}
-            {getNodeTypeIcon(node.node_type)}
-            <h3 className="font-semibold">{node.node_name}</h3>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Badge variant="outline" className={node.node_type === "ATTENDANCE" ? "text-blue-600" : "text-purple-600"}>
-              {node.node_type === "ATTENDANCE" ? "Attendance" : "Room Access"}
-            </Badge>
-            <Badge variant={getStatusColor(node.status || "OFFLINE")}>{node.status || "OFFLINE"}</Badge>
-          </div>
-        </div>
+  const renderNodeCard = (node: NFCNode) => {
+    const clickable = node.node_type === "ROOM_ACCESS"
 
-        <div className="space-y-2 text-sm text-muted-foreground">
-          <div className="flex items-center space-x-2">
-            <MapPin className="h-3 w-3" />
-            <span>{node.location}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Server className="h-3 w-3" />
-            <span>{node.node_id}</span>
-          </div>
-          {node.ip_address && (
-            <div className="flex items-center space-x-2">
-              <Activity className="h-3 w-3" />
-              <span>{node.ip_address}</span>
-            </div>
-          )}
-          {node.uptime_duration && (
-            <div className="flex items-center space-x-2">
-              <Clock className="h-3 w-3" />
-              <span>Uptime: {node.uptime_duration}</span>
-            </div>
-          )}
-          {node.last_heartbeat && <div className="text-xs">Last seen: {formatDateTime(node.last_heartbeat)}</div>}
-        </div>
+    const onCardClick = () => {
+      if (clickable) handleOpenHistory(node)
+    }
 
-        <div className="flex justify-end space-x-2 mt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setSelectedNode(node)
-              setIsEditModalOpen(true)
-            }}
-          >
-            <Edit className="h-3 w-3 mr-1" />
-            Edit
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => handleDeleteNode(node.node_id)}>
-            <Trash2 className="h-3 w-3 mr-1" />
-            Delete
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
+    return (
+      <Card
+        key={node.id}
+        onClick={onCardClick}
+        onKeyDown={(e) => {
+          if (clickable && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault()
+            onCardClick()
+          }
+        }}
+        role={clickable ? "button" : undefined}
+        tabIndex={clickable ? 0 : -1}
+        className={`border-l-4 ${
+          node.node_type === "ATTENDANCE" ? "border-l-blue-500" : "border-l-purple-500"
+        } ${clickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+        aria-label={clickable ? `View access history for ${node.node_name}` : undefined}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              {getStatusIcon(node.status || "OFFLINE")}
+              {getNodeTypeIcon(node.node_type)}
+              <h3 className="font-semibold">{node.node_name}</h3>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Badge
+                variant="outline"
+                className={node.node_type === "ATTENDANCE" ? "text-blue-600" : "text-purple-600"}
+              >
+                {node.node_type === "ATTENDANCE" ? "Attendance" : "Room Access"}
+              </Badge>
+              <Badge variant={getStatusColor(node.status || "OFFLINE")}>{node.status || "OFFLINE"}</Badge>
+            </div>
+          </div>
+
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="flex items-center space-x-2">
+              <MapPin className="h-3 w-3" />
+              <span>{node.location}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Server className="h-3 w-3" />
+              <span>{node.node_id}</span>
+            </div>
+            {node.ip_address && (
+              <div className="flex items-center space-x-2">
+                <Activity className="h-3 w-3" />
+                <span>{node.ip_address}</span>
+              </div>
+            )}
+            {node.uptime_duration && (
+              <div className="flex items-center space-x-2">
+                <Clock className="h-3 w-3" />
+                <span>Uptime: {node.uptime_duration}</span>
+              </div>
+            )}
+            {node.last_heartbeat && <div className="text-xs">Last seen: {formatDateTime(node.last_heartbeat)}</div>}
+          </div>
+
+          <div className="flex justify-end space-x-2 mt-4">
+            {node.node_type === "ROOM_ACCESS" && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleOpenHistory(node)
+                }}
+              >
+                <Shield className="h-3 w-3 mr-1" />
+                View Access History
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedNode(node)
+                setIsEditModalOpen(true)
+              }}
+            >
+              <Edit className="h-3 w-3 mr-1" />
+              Edit
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDeleteNode(node.node_id)
+              }}
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
+              Delete
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -696,6 +776,117 @@ export default function NodeManagement() {
                   Cancel
                 </Button>
                 <Button onClick={handleUpdateNode}>Update Node</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Room Access History Modal */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              {historyNode ? `Access History • ${historyNode.node_name}` : "Access History"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {historyLoading ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="animate-pulse h-10 bg-slate-100 rounded" />
+              ))}
+            </div>
+          ) : historyLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No access events recorded for this node.</p>
+          ) : (
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="bg-emerald-50 border-emerald-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      <div>
+                        <div className="text-xs text-emerald-700">Granted</div>
+                        <div className="text-lg font-semibold text-emerald-800">
+                          {historyLogs.filter((l) => l.access_granted).length}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-rose-50 border-rose-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-5 w-5 text-rose-600" />
+                      <div>
+                        <div className="text-xs text-rose-700">Denied</div>
+                        <div className="text-lg font-semibold text-rose-800">
+                          {historyLogs.filter((l) => !l.access_granted).length}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-slate-50 border-slate-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-slate-600" />
+                      <div>
+                        <div className="text-xs text-slate-600">Total Events</div>
+                        <div className="text-lg font-semibold text-slate-800">{historyLogs.length}</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Logs list */}
+              <div className="space-y-2">
+                {historyLogs.map((log) => (
+                  <div key={log.id} className="flex items-center justify-between gap-4 p-3 rounded-lg border bg-white">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {log.access_granted ? (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-rose-600 flex-shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <User2 className="h-4 w-4 text-slate-500" />
+                          <span className="font-medium truncate">{log.employee_name || "Unknown Employee"}</span>
+                          <Badge variant={log.access_granted ? "default" : "destructive"}>
+                            {log.access_granted ? "Granted" : "Denied"}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            {formatDateTime(log.access_time)}
+                          </span>
+                          {log.room_name && (
+                            <span className="flex items-center gap-1">
+                              <DoorOpen className="h-3.5 w-3.5" />
+                              {log.room_name}
+                            </span>
+                          )}
+                          {log.access_method && (
+                            <span className="flex items-center gap-1">
+                              <KeyRound className="h-3.5 w-3.5" />
+                              {log.access_method}
+                            </span>
+                          )}
+                          {log.nfc_card_uid && <span>Card: {log.nfc_card_uid}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatDateTime(log.access_time)}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

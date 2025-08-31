@@ -551,7 +551,7 @@ export async function getAttendanceStatsByDate(date: string): Promise<{
 
 // NFC Node Management Functions
 export async function getNFCNodes(): Promise<NFCNode[]> {
-  noStore();
+  noStore()
   try {
     // Mark nodes as OFFLINE if last heartbeat was more than 6 minutes ago
     await sql`
@@ -559,27 +559,26 @@ export async function getNFCNodes(): Promise<NFCNode[]> {
       SET status = 'OFFLINE'
       WHERE (last_heartbeat IS NULL OR last_heartbeat < NOW() - INTERVAL '6 minutes')
         AND status = 'ONLINE';
-    `;
-    // (Optional) Also mark nodes as ONLINE if they have recent heartbeat but status isn't updated 
+    `
+    // (Optional) Also mark nodes as ONLINE if they have recent heartbeat but status isn't updated
     await sql`
       UPDATE nfc_nodes
       SET status = 'ONLINE'
       WHERE last_heartbeat >= NOW() - INTERVAL '6 minutes'
         AND status = 'OFFLINE';
-    `;
+    `
 
-    const result = await sql`SELECT * FROM nfc_nodes ORDER BY node_name`;
+    const result = await sql`SELECT * FROM nfc_nodes ORDER BY node_name`
     if (!result || !Array.isArray(result)) {
-      console.warn("NFC nodes query result is not an array:", result);
-      return [];
+      console.warn("NFC nodes query result is not an array:", result)
+      return []
     }
-    return result.map((row: any) => processNodeData(row));
+    return result.map((row: any) => processNodeData(row))
   } catch (error) {
-    console.error("Failed to fetch NFC nodes:", error);
-    return [];
+    console.error("Failed to fetch NFC nodes:", error)
+    return []
   }
 }
-
 
 export async function createNFCNode(nodeData: Partial<NFCNode>): Promise<NFCNode | null> {
   noStore() // Ensure no caching
@@ -644,18 +643,18 @@ export async function deleteNFCNode(nodeId: string): Promise<boolean> {
 }
 
 export async function updateNodeHeartbeat(nodeId: string): Promise<void> {
-  noStore(); // prevent caching
+  noStore() // prevent caching
   try {
     // Check the node's last heartbeat time and current status
-    const [node] = await sql`SELECT status, last_heartbeat FROM nfc_nodes WHERE node_id = ${nodeId}`;
-    const now = Date.now();
-    let wasOffline = false;
+    const [node] = await sql`SELECT status, last_heartbeat FROM nfc_nodes WHERE node_id = ${nodeId}`
+    const now = Date.now()
+    let wasOffline = false
     if (node) {
-      const lastHb = node.last_heartbeat ? new Date(node.last_heartbeat).getTime() : 0;
-      const status = node.status;
+      const lastHb = node.last_heartbeat ? new Date(node.last_heartbeat).getTime() : 0
+      const status = node.status
       // Consider node offline if status was OFFLINE or last heartbeat was more than 6 minutes ago
-      if (status === 'OFFLINE' || (lastHb > 0 && now - lastHb > 6 * 60 * 1000)) {
-        wasOffline = true;
+      if (status === "OFFLINE" || (lastHb > 0 && now - lastHb > 6 * 60 * 1000)) {
+        wasOffline = true
       }
     }
 
@@ -664,25 +663,24 @@ export async function updateNodeHeartbeat(nodeId: string): Promise<void> {
       UPDATE nfc_nodes 
       SET last_heartbeat = CURRENT_TIMESTAMP, status = 'ONLINE' 
       WHERE node_id = ${nodeId}
-    `;
+    `
 
     // Only log an ONLINE event if the node was previously offline
     if (wasOffline) {
       await sql`
         INSERT INTO node_activity_logs (node_id, activity_type, message)
         VALUES (${nodeId}, 'ONLINE', 'Node came online')
-      `;
-      console.log(`Node ${nodeId} came online (heartbeat received after downtime).`);
+      `
+      console.log(`Node ${nodeId} came online (heartbeat received after downtime).`)
     } else {
       // (Optional: you could log a heartbeat ping here if needed, but it's usually not necessary to log every ping)
-      console.log(`Heartbeat received from node ${nodeId}. (Already online)`);
+      console.log(`Heartbeat received from node ${nodeId}. (Already online)`)
     }
   } catch (error) {
-    console.error("Error updating node heartbeat:", error);
-    throw error;
+    console.error("Error updating node heartbeat:", error)
+    throw error
   }
 }
-
 
 export async function getNodeActivityLogs(nodeId?: string, limit = 100): Promise<NodeActivityLog[]> {
   noStore() // Ensure no caching
@@ -758,14 +756,13 @@ export async function getEmployeeByNfcCardUid(nfcCardUid: string): Promise<Emplo
   }
 }
 
-
 export async function createEmployee(employee: Partial<Employee>): Promise<Employee> {
-  noStore(); // Ensure no caching
+  noStore() // Ensure no caching
   try {
     // Format hire_date to ensure it's in YYYY-MM-DD format
     const formattedHireDate = employee.hire_date
       ? formatDateForDB(employee.hire_date)
-      : formatDateForDB(new Date().toISOString());
+      : formatDateForDB(new Date().toISOString())
 
     // Insert the new employee into the 'employees' table
     const [newEmployee] = await sql<Employee[]>`
@@ -786,43 +783,46 @@ export async function createEmployee(employee: Partial<Employee>): Promise<Emplo
         ${employee.role_id}
       )
       RETURNING *
-    `;
+    `
 
     // Process the returned employee data into the expected format
-    const createdEmployee = processEmployeeData(newEmployee);
+    const createdEmployee = processEmployeeData(newEmployee)
 
     // --- AUTOMATIC ROOM ASSIGNMENT LOGIC ---
-    const department = createdEmployee.department;
+    const department = createdEmployee.department
 
     // Check if the department exists in our room configurations
     if (department && roomConfigurations[department as keyof typeof roomConfigurations]) {
       try {
-        const roomCodesForDepartment = roomConfigurations[department as keyof typeof roomConfigurations];
+        const roomCodesForDepartment = roomConfigurations[department as keyof typeof roomConfigurations]
 
         // Fetch the actual numeric room IDs from the database using their codes
-        const roomIdsForDepartment = await getRoomIdsByCodes(roomCodesForDepartment);
+        const roomIdsForDepartment = await getRoomIdsByCodes(roomCodesForDepartment)
 
         // User ID for automated access grants (action performed via admin panel)
-        const grantedByUserId = null;
+        const grantedByUserId = null
 
         // Loop through each relevant room ID and grant access to the new employee
         for (const roomId of roomIdsForDepartment) {
-          await grantRoomAccess(createdEmployee.id, roomId, grantedByUserId);
-          console.log(`Granted access for employee ${createdEmployee.employee_id} (${department}) to room ID ${roomId}`);
+          await grantRoomAccess(createdEmployee.id, roomId, grantedByUserId)
+          console.log(`Granted access for employee ${createdEmployee.employee_id} (${department}) to room ID ${roomId}`)
         }
       } catch (autoAssignError) {
         // Log any errors during auto-assignment, but do not prevent employee creation from succeeding.
-        console.error(`Error during automatic room assignment for ${department} employee ${createdEmployee.employee_id}:`, autoAssignError);
+        console.error(
+          `Error during automatic room assignment for ${department} employee ${createdEmployee.employee_id}:`,
+          autoAssignError,
+        )
       }
     }
     // --- END AUTOMATIC ROOM ASSIGNMENT LOGIC ---
 
     // Return the newly created and processed employee data
-    return createdEmployee;
+    return createdEmployee
   } catch (error) {
-    console.error("Error creating employee:", error);
+    console.error("Error creating employee:", error)
     // Re-throw the error to indicate that employee creation failed
-    throw new Error(`Failed to create employee: ${error instanceof Error ? error.message : "Unknown error"}`);
+    throw new Error(`Failed to create employee: ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }
 
@@ -989,7 +989,7 @@ export async function grantRoomAccess(
   roomId: number,
   grantedByUserId: string | null,
 ): Promise<AccessPermission> {
-  noStore();
+  noStore()
   try {
     // Try to update existing inactive record first
     const [updatedAccess] = await sql<AccessPermission[]>`
@@ -997,7 +997,7 @@ export async function grantRoomAccess(
       SET is_active = true, granted_by = ${grantedByUserId}, granted_at = CURRENT_TIMESTAMP
       WHERE employee_id = ${employeeId} AND room_id = ${roomId} AND is_active = false
       RETURNING *
-    `;
+    `
 
     // If no existing record was updated, insert a new one
     if (!updatedAccess) {
@@ -1005,99 +1005,143 @@ export async function grantRoomAccess(
         INSERT INTO access_permissions (employee_id, room_id, granted_by, is_active)
         VALUES (${employeeId}, ${roomId}, ${grantedByUserId}, true)
         RETURNING *
-      `;
-      return newAccess;
+      `
+      return newAccess
     }
 
-    return updatedAccess;
+    return updatedAccess
   } catch (error) {
-    console.error("Failed to grant room access:", error);
-    throw new Error("Failed to grant room access.");
+    console.error("Failed to grant room access:", error)
+    throw new Error("Failed to grant room access.")
   }
 }
 
 // Room configurations for each department/role
 const roomConfigurations = {
-  'Engineering': [
-    'ROOM_021', 'ROOM_022', 'ROOM_023', // Floors 2,3,4
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms (assuming Conf Room is also a meeting room)
-    'ROOM_013', // Library
-    'ROOM_009', // Break Room
-    'ROOM_011', // Reception
-    'ROOM_012', // Training Room
+  Engineering: [
+    "ROOM_021",
+    "ROOM_022",
+    "ROOM_023", // Floors 2,3,4
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms (assuming Conf Room is also a meeting room)
+    "ROOM_013", // Library
+    "ROOM_009", // Break Room
+    "ROOM_011", // Reception
+    "ROOM_012", // Training Room
   ],
-  'Marketing': [
-    'ROOM_020', // Floor 1
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
-    'ROOM_013', // Library
-    'ROOM_009', // Break Room
-    'ROOM_011', // Reception
+  Marketing: [
+    "ROOM_020", // Floor 1
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms
+    "ROOM_013", // Library
+    "ROOM_009", // Break Room
+    "ROOM_011", // Reception
   ],
-  'Sales': [
-    'ROOM_024', // Floor 5
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
-    'ROOM_009', // Break Room
-    'ROOM_011', // Reception
+  Sales: [
+    "ROOM_024", // Floor 5
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms
+    "ROOM_009", // Break Room
+    "ROOM_011", // Reception
   ],
-  'HR': [
-    'ROOM_019', // HR Cabin
-    'ROOM_018', // CEO Cabin
-    'ROOM_020', 'ROOM_021', 'ROOM_022', 'ROOM_023', 'ROOM_024', // All floors
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
-    'ROOM_009', // Break Room
-    'ROOM_013', // Library
-    'ROOM_012', // Training Room
-    'EXEC001',  // Executive Office
+  HR: [
+    "ROOM_019", // HR Cabin
+    "ROOM_018", // CEO Cabin
+    "ROOM_020",
+    "ROOM_021",
+    "ROOM_022",
+    "ROOM_023",
+    "ROOM_024", // All floors
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms
+    "ROOM_009", // Break Room
+    "ROOM_013", // Library
+    "ROOM_012", // Training Room
+    "EXEC001", // Executive Office
   ],
-  'Finance': [
-    'ROOM_016', // Finance Room
-    'ROOM_017', // Accounts Room
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
-    'ROOM_009', // Break Room
-    'ROOM_011', // Reception
-    'ROOM_013', // Library
+  Finance: [
+    "ROOM_016", // Finance Room
+    "ROOM_017", // Accounts Room
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms
+    "ROOM_009", // Break Room
+    "ROOM_011", // Reception
+    "ROOM_013", // Library
   ],
-  'Operations': [
-    'ROOM_020', 'ROOM_021', 'ROOM_022', 'ROOM_023', 'ROOM_024', // All floors
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
-    'ROOM_010', // Security Office
-    'ROOM_009', // Break Room
-    'ROOM_011', // Reception
-    'ROOM_013', // Library
+  Operations: [
+    "ROOM_020",
+    "ROOM_021",
+    "ROOM_022",
+    "ROOM_023",
+    "ROOM_024", // All floors
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms
+    "ROOM_010", // Security Office
+    "ROOM_009", // Break Room
+    "ROOM_011", // Reception
+    "ROOM_013", // Library
   ],
-  'IT': [
-    'ROOM_021', 'ROOM_022', 'ROOM_023', // Floor 2,3,4
-    'SERV001',  // Server Room
-    'ROOM_015', // Server Backup Room
-    'ROOM_010', // Security Office
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
-    'ROOM_009', // Break Room
-    'ROOM_011', // Reception
-    'ROOM_014', // Admin Cabin
+  IT: [
+    "ROOM_021",
+    "ROOM_022",
+    "ROOM_023", // Floor 2,3,4
+    "SERV001", // Server Room
+    "ROOM_015", // Server Backup Room
+    "ROOM_010", // Security Office
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms
+    "ROOM_009", // Break Room
+    "ROOM_011", // Reception
+    "ROOM_014", // Admin Cabin
   ],
-  'Customer Support': [
-    'ROOM_020', // Floor 1
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
-    'ROOM_012', // Training Room
-    'ROOM_009', // Break Room
-    'ROOM_011', // Reception
+  "Customer Support": [
+    "ROOM_020", // Floor 1
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms
+    "ROOM_012", // Training Room
+    "ROOM_009", // Break Room
+    "ROOM_011", // Reception
   ],
-  'Legal': [
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
-    'ROOM_018', // CEO Cabin
-    'EXEC001',  // Executive Office
-    'ROOM_013', // Library
-    'ROOM_009', // Break Room
-    'ROOM_011', // Reception
+  Legal: [
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms
+    "ROOM_018", // CEO Cabin
+    "EXEC001", // Executive Office
+    "ROOM_013", // Library
+    "ROOM_009", // Break Room
+    "ROOM_011", // Reception
   ],
-  'Research': [
-    'ROOM_013', // Library
-    'ROOM_006', 'ROOM_007', 'ROOM_008', 'CONF001', // All Meeting rooms
-    'ROOM_021', 'ROOM_022', 'ROOM_023', // Floor 2,3,4
-    'ROOM_009', // Break Room
-    'ROOM_011', // Reception
+  Research: [
+    "ROOM_013", // Library
+    "ROOM_006",
+    "ROOM_007",
+    "ROOM_008",
+    "CONF001", // All Meeting rooms
+    "ROOM_021",
+    "ROOM_022",
+    "ROOM_023", // Floor 2,3,4
+    "ROOM_009", // Break Room
+    "ROOM_011", // Reception
   ],
-};
+}
 
 export async function revokeRoomAccess(employeeId: number, roomId: number): Promise<void> {
   noStore() // Ensure no caching
@@ -1205,7 +1249,7 @@ export async function getAttendanceRecords(employeeId?: number, date?: string): 
 
     query += ` ORDER BY ar.tap_time DESC`
 
-    const result = await sql(query, params) as AttendanceRecord[]
+    const result = (await sql(query, params)) as AttendanceRecord[]
     return result.map((row: any) => processAttendanceData(row))
   } catch (error) {
     console.error("Failed to fetch attendance records:", error)
@@ -1385,17 +1429,57 @@ export async function getEmployeeAttendanceByDate(employeeId: number, date: stri
   }
 }
 
-
 export async function getRoomIdsByCodes(roomCodes: string[]): Promise<number[]> {
-  noStore();
+  noStore()
   try {
     const result = await sql<{ id: number }[]>`
       SELECT id FROM rooms
       WHERE room_code = ANY(${roomCodes}::text[]) AND is_active = true
-    `;
-    return result.map((row: { id: any }) => row.id);
+    `
+    return result.map((row: { id: any }) => row.id)
   } catch (error) {
-    console.error("Error fetching room IDs by codes:", error);
-    throw new Error("Failed to fetch room IDs for auto-assignment.");
+    console.error("Error fetching room IDs by codes:", error)
+    throw new Error("Failed to fetch room IDs for auto-assignment.")
+  }
+}
+
+// Queries room access logs for a given node_id, includes both granted and denied attempts, and enriches with employee and room names.
+export async function getRoomAccessLogsByNodeId(nodeId: string, limit = 100): Promise<RoomAccessLog[]> {
+  noStore() // Ensure no caching
+  try {
+    // Fetch logs for the room associated with this node.
+    // If the node has no mapped room_id, this will return an empty set.
+    const result = await sql`
+      SELECT 
+        ral.id,
+        ral.employee_id,
+        COALESCE(CONCAT(e.first_name, ' ', e.last_name), 'Unknown Employee') AS employee_name,
+        ral.room_id,
+        COALESCE(r.room_name, 'Unknown Room') AS room_name,
+        ral.access_time,
+        ral.access_granted,
+        ral.nfc_card_uid,
+        ral.access_method
+      FROM room_access_logs ral
+      LEFT JOIN employees e ON ral.employee_id = e.id
+      LEFT JOIN rooms r ON ral.room_id = r.id
+      WHERE ral.room_id = (
+        SELECT nn.room_id
+        FROM nfc_nodes nn
+        WHERE nn.node_id = ${nodeId}
+        LIMIT 1
+      )
+      ORDER BY ral.access_time DESC
+      LIMIT ${limit}
+    `
+
+    if (!result || !Array.isArray(result)) {
+      console.warn("Room access logs by node query result is not an array:", result)
+      return []
+    }
+    return result as RoomAccessLog[]
+  } catch (error) {
+    console.error("Error fetching room access logs by node:", error)
+    return []
   }
 }
