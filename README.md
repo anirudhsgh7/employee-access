@@ -59,7 +59,7 @@ Each access node consists of:
 - Passive NFC UID cards  
 
 ### Data Flow
--NFC Card → STM32 → UART → ESP32 → HTTPS → Cloud Server
+NFC Card → STM32 → UART → ESP32 → HTTPS → Cloud Server <br/>
 Nodes support offline access decisions, automatic retry logic, and live heartbeat monitoring.
 
 ---
