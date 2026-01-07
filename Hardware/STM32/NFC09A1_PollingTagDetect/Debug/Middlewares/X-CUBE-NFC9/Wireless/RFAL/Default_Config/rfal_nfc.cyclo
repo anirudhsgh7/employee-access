@@ -1,0 +1,14 @@
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:138:12:rfalNfcInitialize	3
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:164:12:rfalNfcDiscover	24
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:242:12:rfalNfcDeactivate	13
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:278:12:rfalNfcSelect	2
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:294:14:rfalNfcGetState	1
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:300:12:rfalNfcGetDevicesFound	4
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:321:12:rfalNfcGetActiveDevice	5
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:347:6:rfalNfcWorker	43
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:620:12:rfalNfcDataExchangeStart	14
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:757:12:rfalNfcDataExchangeGetStatus	10
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:852:19:rfalNfcPollTechDetection	49
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:1178:19:rfalNfcPollCollResolution	57
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:1494:19:rfalNfcPollActivation	43
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_nfc.c:2169:19:rfalNfcDeactivation	19
