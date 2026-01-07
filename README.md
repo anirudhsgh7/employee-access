@@ -92,10 +92,4 @@ Nodes support offline access decisions, automatic retry logic, and live heartbea
 - Custom PCB fabrication  
 - AI-based anomaly detection  
 
----
-
-## 📄 License
-
-This project is intended for academic, research, and pilot deployment purposes.
-
-
+--
