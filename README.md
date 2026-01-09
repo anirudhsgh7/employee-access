@@ -3,7 +3,9 @@ Anirudh Singh 2023091 <br/>
 Ujjwal Goel 2023565
 
 **Project Abstract –** <br/>
-This project delivers an IoT-enabled, production-ready attendance and room-access device that authenticates users via NFC ID cards and securely streams real-time attendance events to a central server for analytics and role-based access decisions. Built on an STM32 with the X-NUCLEO-NFC09A1 and integrated Wi-Fi, the next phase covers custom PCB design and fabrication to consolidate the MCU, NFC front end, power management, and I/O into a compact, reliable module with a smaller footprint. Planned features include offline attendance caching with auto-resync, OTA firmware updates, ESD/EMI protections, service test points, and an optional front-panel display for live status and user feedback. The architecture leaves clear paths for future add-ons like cameras, electronic door actuation, and mobile alerts. The result is a scalable IoT product for campuses that reduces manual overhead, discourages proxy attendance, and is ready for pilot deployment and small-batch manufacturing.
+The NFC-Based Employee Access Control System is a cloud-connected embedded IoT platform designed to automate attendance and enforce secure, role-based physical access across modern organizations. It replaces manual logs and legacy RFID systems with a real-time, intelligent infrastructure capable of handling multi-zone and multi-location deployments.
+
+Built using industrial embedded hardware and a scalable web backend, the system provides fast contactless authentication, centralized monitoring, offline-resilient edge nodes, and audit-grade security — making it suitable for corporate, institutional, and government environments.
 
 ## 🚀 Key Features
 
