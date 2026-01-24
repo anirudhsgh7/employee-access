@@ -1,6 +1,0 @@
-../X-CUBE-NFC9/Target/logger.c:64:6:logUsartInit	16	static
-../X-CUBE-NFC9/Target/logger.c:76:9:logUsartTx	24	static
-../X-CUBE-NFC9/Target/logger.c:93:5:logUsart	272	static
-../X-CUBE-NFC9/Target/logger.c:117:7:hex2Str	40	static
-../X-CUBE-NFC9/Target/logger.c:148:6:logITMTx	16	static
-../X-CUBE-NFC9/Target/logger.c:164:5:logITM	272	static
