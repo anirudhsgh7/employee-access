@@ -1,0 +1,9 @@
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_analogConfig.c:107:6:rfalAnalogConfigInitialize	8	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_analogConfig.c:125:6:rfalAnalogConfigIsReady	8	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_analogConfig.c:132:12:rfalAnalogConfigListWriteRaw	16	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_analogConfig.c:173:12:rfalAnalogConfigListWrite	16	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_analogConfig.c:237:12:rfalAnalogConfigListReadRaw	24	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_analogConfig.c:263:12:rfalAnalogConfigListRead	40	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_analogConfig.c:296:12:rfalSetAnalogConfig	48	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_analogConfig.c:346:10:rfalAnalogConfigGenModeID	32	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_analogConfig.c:437:28:rfalAnalogConfigSearch	32	static

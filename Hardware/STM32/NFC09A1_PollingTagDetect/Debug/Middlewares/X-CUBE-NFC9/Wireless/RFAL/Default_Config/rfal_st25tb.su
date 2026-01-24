@@ -1,0 +1,13 @@
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:149:13:rfalSt25tbPollerDoCollisionResolution	40	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:229:12:rfalSt25tbPollerInitialize	8	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:236:12:rfalSt25tbPollerCheckPresence	32	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:263:12:rfalSt25tbPollerInitiate	64	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:294:12:rfalSt25tbPollerPcall	56	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:318:12:rfalSt25tbPollerSlotMarker	56	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:347:12:rfalSt25tbPollerSelect	64	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:372:12:rfalSt25tbPollerGetUID	56	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:396:12:rfalSt25tbPollerCollisionResolution	48	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:447:12:rfalSt25tbPollerReadBlock	56	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:472:12:rfalSt25tbPollerWriteBlock	64	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:523:12:rfalSt25tbPollerCompletion	32	static
+/Users/anirudhsingh/STM32Cube/Repository/Packs/STMicroelectronics/X-CUBE-NFC9/1.0.0/Middlewares/ST/rfal/Src/rfal_st25tb.c:536:12:rfalSt25tbPollerResetToInventory	32	static
